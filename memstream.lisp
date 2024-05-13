@@ -11,6 +11,13 @@
   (position 0 :type (integer 0 #.array-total-size-limit))
   (size 0 :type (integer 0 #.array-total-size-limit)))
 
+(defmacro with-stream-slots (stream &body body)
+  `(symbol-macrolet
+       ((data (ms-data ,stream))
+        (size (ms-size ,stream))
+        (position (ms-position ,stream)))
+     ,@body))
+
 (defun make-memstream (&optional data)
   (declare (type (or null raw-data) data))
   (if data
@@ -38,7 +45,7 @@
 (defun ms-read-byte (stream)
   (declare (type memstream stream)
            #.*optimize*)
-  (with-slots (data size position) stream
+  (with-stream-slots stream
     (cond
       ((< position size)
        (prog1
@@ -50,7 +57,7 @@
 (defun ms-peek-byte (stream)
   (declare (type memstream stream)
            #.*optimize*)
-  (with-slots (data size position) stream
+  (with-stream-slots stream
     (cond
       ((< position size)
        (aref data position))
@@ -61,7 +68,7 @@
   (declare (type memstream stream)
            (type (integer 0 #.array-total-size-limit) min-size)
            #.*optimize*)
-  (with-slots (data) stream
+  (with-stream-slots stream
     (let ((newdata (make-array (max min-size
                                     (min (* 2 (array-total-size data))
                                          array-total-size-limit))
@@ -74,7 +81,7 @@
   (declare (type memstream stream)
            (type (unsigned-byte 8) byte)
            #.*optimize*)
-  (with-slots (data size position) stream
+  (with-stream-slots stream
     (when (>= position (array-total-size data))
       (ms-extend-stream stream))
     (setf (aref data position) byte)
@@ -88,7 +95,7 @@
            (type memstream stream)
            (type (integer 0 #.array-total-size-limit) start end)
            #.*optimize*)
-  (with-slots (data size position) stream
+  (with-stream-slots stream
     (let* ((count (- end start))
            (end2 (min size (+ position count))))
       (replace sequence data :start1 start :end1 end
@@ -103,7 +110,7 @@
            (type memstream stream)
            (type (integer 0 #.array-total-size-limit) start end)
            #.*optimize*)
-  (with-slots (data size position) stream
+  (with-stream-slots stream
     (let* ((count (- end start))
            (end1 (+ position count)))
       (when (> end1 (array-total-size data))
@@ -118,6 +125,6 @@
 (defun ms-whole-data (stream)
   (declare (type memstream stream)
            #.*optimize*)
-  (with-slots (data size) stream
+  (with-stream-slots stream
     (declare (type raw-data data))
     (subseq data 0 size)))

@@ -4,10 +4,8 @@
 See [RFC 8949](https://datatracker.ietf.org/doc/html/rfc8949) - “Concise Binary
 Object Representation”.
 
-This package is a fast implementation for Common Lisp. Note that I only tested
-it on SBCL, and it might in fact use some non-standard features, like
-`WITH-SLOTS` on a structure instance; patches for other CL implementations are
-welcome.
+This package is a fast implementation for Common Lisp (I only tested it on
+SBCL).
 
 For now the only exported functions are `encode` and `decode`.
 

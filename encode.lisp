@@ -36,8 +36,6 @@
            #.*optimize*)
   (let ((tag (ash type 5)))
     (cond
-      ((= type 7)
-       (ms-write-byte (logior tag argument) output))
       ((<= argument 23)
        (ms-write-byte (logior tag argument) output))
       ((<= argument #xFF)
@@ -72,12 +70,12 @@
              `(handler-case
                   (let ((v (,encoder value)))
                     (when (= value (,decoder v))
-                      (write-tag 7
-                                 ,(ecase bytes
-                                    (2 25)
-                                    (4 26)
-                                    (8 27))
-                                 output)
+                      (ms-write-byte (logior #b11100000
+                                             ,(ecase bytes
+                                                (2 25)
+                                                (4 26)
+                                                (8 27)))
+                                     output)
                       (unroll-write-byte ,bytes v output)
                       t))
                 (error (c)
@@ -157,6 +155,8 @@
            (type memstream output)
            #.*optimize*)
   (cond
+    ((eq 'simple (car value))
+     (write-tag 7 (cdr value) output))
     ((and *jsown-semantics*
           (eq :obj (car value)))
      (encode-alist (cdr value) output))
@@ -192,11 +192,13 @@
       (%encode-object))))
 
 (defmethod encode-object ((ts local-time:timestamp) (output memstream))
-  (let ((epoch (coerce (+ (local-time:timestamp-to-unix ts)
-                          (/ (local-time:timestamp-millisecond ts) 1000))
-                       'double-float)))
+  (let* ((seconds (local-time:timestamp-to-unix ts))
+         (milliseconds (local-time:timestamp-millisecond ts)))
     (write-tag 6 1 output)
-    (encode-float epoch output)))
+    (%encode (if (zerop milliseconds)
+                 seconds
+                 (coerce (+ seconds (/ milliseconds 1000)) 'double-float))
+             output)))
 
 (declaim (inline encode-bignum))
 (flet ((write-num (value output)

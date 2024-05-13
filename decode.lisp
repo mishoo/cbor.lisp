@@ -22,14 +22,15 @@
             (,tag ,_tag)
             (type (ldb (byte 3 5) ,tag))
             (argument (ldb (byte 5 0) ,tag))
-            (special? (= argument 31)))
+            (special? (= argument 31))
+            (simple? (= type 7)))
        (declare (type (unsigned-byte 3) type)
-                (ignorable special?))
+                (ignorable special? simple?))
        (case argument
          (24 (setf argument (unroll-read-byte 1 ,input)))
-         (25 (setf argument (unroll-read-byte 2 ,input)))
-         (26 (setf argument (unroll-read-byte 4 ,input)))
-         (27 (setf argument (unroll-read-byte 8 ,input))))
+         (25 (setf argument (unroll-read-byte 2 ,input) simple? nil))
+         (26 (setf argument (unroll-read-byte 4 ,input) simple? nil))
+         (27 (setf argument (unroll-read-byte 8 ,input) simple? nil)))
        ,@body)))
 
 (defun read-binary (input size &optional indefinite-size)
@@ -39,7 +40,7 @@
            #.*optimize*)
   (cond
     (indefinite-size
-     (loop with tag = (ms-read-byte input)
+     (loop for tag = (ms-read-byte input)
            until (= tag 255)
            collect (with-tag (input tag)
                      (assert (= type 2)
@@ -64,7 +65,7 @@
            #.*optimize*)
   (cond
     (indefinite-size
-     (loop with tag = (ms-read-byte input)
+     (loop for tag = (ms-read-byte input)
            until (= tag 255)
            collect (with-tag (input tag)
                      (assert (= type 3) (type)
@@ -76,14 +77,12 @@
              into strings
            finally (return (apply #'concatenate 'simple-string strings))))
     (t
-     (let ((data (ms-data input)))
-       ;; that's cheating a bit, accessing the underlying data
-       ;; sequence (should have used ms-read-sequence), but oh
-       ;; well.. why cons if we can not cons?
-       (trivial-utf-8:utf-8-bytes-to-string
-        data
-        :start (ms-position input)
-        :end (incf (ms-position input) size))))))
+     ;; that's cheating a bit, accessing the underlying data
+     ;; sequence (should have used ms-read-sequence), but oh
+     ;; well.. why cons if we can not cons?
+     (trivial-utf-8:utf-8-bytes-to-string (ms-data input)
+                                          :start (ms-position input)
+                                          :end (incf (ms-position input) size)))))
 
 (defun read-array (input size &optional indefinite-size)
   (declare (type memstream input)
@@ -110,12 +109,11 @@
          seq)))))
 
 (labels
-    ((maybe-symbol (string)
-       (declare (type simple-string string)
-                #.*optimize*)
-       (if *string-to-symbol*
-           (funcall *string-to-symbol* string)
-           string))
+    ((maybe-symbol (thing)
+       (declare #.*optimize*)
+       (if (and (stringp thing) *string-to-symbol*)
+           (funcall *string-to-symbol* thing)
+           thing))
      (read-alist (input size &optional indefinite-size)
        (declare #.*optimize*)
        (cond
@@ -159,8 +157,7 @@
                   for val = (%decode input)
                   do (setf (gethash key hash) val))))
          hash)))
-  (declare (inline maybe-symbol read-alist read-plist read-hash)
-           (ftype (function (string) (or simple-string symbol)) maybe-symbol))
+  (declare (inline maybe-symbol read-alist read-plist read-hash))
   (defun read-map (input size &optional indefinite-size)
     (declare (type memstream input)
              (type (integer 0 #.*max-uint64*) size)
@@ -257,4 +254,6 @@
            (4 (read-array input argument special?))
            (5 (read-map input argument special?))
            (6 (read-tagged input argument))
-           (7 (read-float argument))))))))
+           (7 (if simple?
+                  (cons 'simple argument)
+                  (read-float argument)))))))))

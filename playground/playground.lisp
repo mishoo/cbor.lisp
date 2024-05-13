@@ -2,7 +2,7 @@
 
 #-sbcl (error "This file requires SBCL")
 
-(ql:quickload '("flexi-streams" "yason" "jsown"))
+(ql:quickload '("flexi-streams" "yason" "jsown" "cl-base64"))
 
 (defun test-encode (value &rest args)
   (let ((data (coerce (apply #'encode value args) 'raw-data)))
@@ -111,3 +111,47 @@
 ;;   (test-decode (list (make-dude :first-name "John" :last-name "Doe" :age 44)
 ;;                      1
 ;;                      (make-dude :first-name "Jane" :last-name "Austin" :age 44))))
+
+
+
+;;; appendix-a.json test data from: https://github.com/cbor/test-vectors/
+(defparameter *json-file* (asdf:system-relative-pathname "cbor" "playground/appendix_a.json"))
+
+(defun read-json (filename)
+  (with-open-file (input filename :element-type '(unsigned-byte 8))
+    (jsown:parse (trivial-utf-8:read-utf-8-string input :stop-at-eof t))))
+
+(defun test-appendix-a-json (&optional (filename *json-file*))
+  (let (;; (*jsown-semantics* t)
+        (*symbol-to-string* nil)
+        (*string-to-symbol* nil))
+    (loop for test in (read-json filename)
+          for base64 = (jsown:val test "cbor")
+          for binary = (cl-base64:base64-string-to-usb8-array base64)
+          for roundtrip = (jsown:val test "roundtrip")
+          for decoded = (ignore-errors (jsown:val test "decoded"))
+          for diagnostic = (ignore-errors (jsown:val test "diagnostic"))
+          do (handler-case
+                 (let ((data (cbor:decode binary)))
+                   (format t "   ~{~2,'0X~} ~S~%" (coerce binary 'list) data)
+                   (cond
+                     (roundtrip
+                      (let ((enc (cbor:encode data)))
+                        (unless (equalp enc binary)
+                          (format t "!! ~{~2,'0X~} ~S ~{~2,'0X~} (~A)~%"
+                                  (coerce binary 'list) data
+                                  (coerce enc 'list) (or diagnostic "")))))
+                     (decoded
+                      (format t "   ~S~%" decoded)
+                      (let* ((*jsown-semantics* t)
+                             (data (cbor:decode binary)))
+                        (unless (equalp data decoded)
+                          (format t "!! err: we got ~S~%" data))))))
+               (floating-point-overflow ()
+                 (format t "** FLOATING-POINT-OVERFLOW ~{~2,'0X~}~%" (coerce binary 'list)))
+               (end-of-file (err)
+                 (format t "** END-OF-FILE ~{~2,'0X~}~%" (coerce binary 'list))
+                 (error err))
+               (error (err)
+                 (format t "** ERROR ~{~2,'0X~}~%" (coerce binary 'list))
+                 (format t "         ~A~%" err))))))

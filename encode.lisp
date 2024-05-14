@@ -116,7 +116,6 @@
                  (symbol-name value))))
     (encode-string str output)))
 
-(declaim (inline encode-array))
 (defun encode-array (value output)
   (declare (type array value)
            #.*optimize*)
@@ -129,7 +128,6 @@
        (write-tag 5 ,vlength ,output)
        ,@body)))
 
-(declaim (inline encode-hash))
 (defun encode-hash (value output)
   (declare (type hash-table value)
            (type memstream output)
@@ -139,7 +137,6 @@
           do (%encode key output)
              (%encode val output))))
 
-(declaim (inline encode-alist))
 (defun encode-alist (value output)
   (declare (type list value)
            (type memstream output)
@@ -149,7 +146,6 @@
           do (%encode key output)
              (%encode val output))))
 
-(declaim (inline encode-list))
 (defun encode-list (value output)
   (declare (type list value)
            (type memstream output)
@@ -160,8 +156,7 @@
     ((and *jsown-semantics*
           (eq :obj (car value)))
      (encode-alist (cdr value) output))
-    ((and (listp value)
-          (every #'consp value)
+    ((and (every #'consp value)
           (some (lambda (cell)
                   (not (listp (cdr cell))))
                 value))
@@ -200,7 +195,6 @@
                  (coerce (+ seconds (/ milliseconds 1000)) 'double-float))
              output)))
 
-(declaim (inline encode-bignum))
 (flet ((write-num (value output)
          (multiple-value-bind (size rem) (round (integer-length value) 8)
            (unless (zerop rem)

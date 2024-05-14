@@ -170,7 +170,6 @@
           (:alist (read-alist input size indefinite-size))
           (:plist (read-plist input size indefinite-size))))))
 
-(declaim (inline read-bignum))
 (defun read-bignum (input)
   (declare (type memstream input)
            #.*optimize*)

@@ -4,15 +4,21 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (deftype raw-data () '(simple-array (unsigned-byte 8) 1))
-  (defparameter *optimize* '(optimize (speed 0) (safety 1) (space 0) (debug 3)))
+  (defparameter *optimize* '(optimize (speed 3) (safety 1) (space 0) (debug 0)))
   (defparameter *max-uint64* (1- (expt 2 64)))
   (defparameter *min-uint64* (- (expt 2 64))))
+
+(defconstant +tag-string-datetime+ 0)
+(defconstant +tag-float-datetime+ 1)
+(defconstant +tag-positive-bignum+ 2)
+(defconstant +tag-negative-bignum+ 3)
 
 (defconstant +tag-ratio+ 30)
 
 ;; our tags
 (defconstant +tag-symbol+ 2000)
 (defconstant +tag-cons+ 2001)
+(defconstant +tag-list+ 2002)
 
 (defparameter *strict* t
   "Strict mode (TODO: document)")

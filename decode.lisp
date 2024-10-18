@@ -233,18 +233,28 @@
     (cons (%decode input)
           (%decode input))))
 
+(defun read-proper-list (input)
+  (declare (type memstream input)
+           #.*optimize*)
+  (with-tag (input (ms-read-byte input))
+    (assert (= type 4) (type)
+            "Expected array in read-proper-list")
+    (let ((*array-format* :list))
+      (read-array input argument special?))))
+
 (defun read-tagged (input tag)
   (declare (type memstream input)
            (type (integer 0 #.*max-uint64*) tag)
            #.*optimize*)
   (case tag
-    (0 (read-string-datetime input))
-    (1 (read-datetime input))
-    (2 (read-bignum input))
-    (3 (- 0 1 (read-bignum input)))
+    (#.+tag-string-datetime+ (read-string-datetime input))
+    (#.+tag-float-datetime+ (read-datetime input))
+    (#.+tag-positive-bignum+ (read-bignum input))
+    (#.+tag-negative-bignum+ (- 0 1 (read-bignum input)))
     (#.+tag-ratio+ (read-ratio input))
     (#.+tag-symbol+ (read-symbol input))
     (#.+tag-cons+ (read-cons input))
+    (#.+tag-list+ (read-proper-list input))
     (55799 (%decode input))
     (t
      (if *custom-tag-reader*

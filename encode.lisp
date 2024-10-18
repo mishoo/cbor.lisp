@@ -157,6 +157,21 @@
           do (%encode key output)
              (%encode val output))))
 
+(defun proper-list-p (list)
+  (loop with p = list and q = (cdr list) do
+    (cond
+      ((null q)
+       (return t))
+      ((or (eq p q)
+           (not (and (listp p)
+                     (listp q))))
+       (return nil)))
+    (setf p (cdr p))
+    (setf q (cdr q))
+    (unless (listp q)
+      (return nil))
+    (setf q (cdr q))))
+
 (defun encode-cons (value output)
   (declare (type list value)
            (type memstream output)
@@ -168,13 +183,23 @@
       (encode-cons (cdr value) output)
       (%encode (cdr value) output)))
 
+(defun encode-proper-list (list output)
+  (declare (type list list)
+           (type memstream output)
+           #.*optimize*)
+  (write-tag 6 +tag-list+ output)
+  (write-tag 4 (length list) output)
+  (loop for val in list do (%encode val output)))
+
 (defun encode-list (value output)
   (declare (type list value)
            (type memstream output)
            #.*optimize*)
   (cond
     (*strict*
-     (encode-cons value output))
+     (if (proper-list-p value)
+         (encode-proper-list value output)
+         (encode-cons value output)))
     ((eq 'simple (car value))
      (write-tag 7 (cdr value) output))
     ((and *jsown-semantics*
@@ -213,7 +238,7 @@
 (defmethod encode-object ((ts local-time:timestamp) (output memstream))
   (let* ((seconds (local-time:timestamp-to-unix ts))
          (milliseconds (local-time:timestamp-millisecond ts)))
-    (write-tag 6 1 output)
+    (write-tag 6 +tag-float-datetime+ output)
     (%encode (if (zerop milliseconds)
                  seconds
                  (coerce (+ seconds (/ milliseconds 1000)) 'double-float))
@@ -234,10 +259,10 @@
              #.*optimize*)
     (cond
       ((>= value 0)
-       (write-tag 6 2 output)
+       (write-tag 6 +tag-positive-bignum+ output)
        (write-num value output))
       (t
-       (write-tag 6 3 output)
+       (write-tag 6 +tag-negative-bignum+ output)
        (write-num (1- (- value)) output)))))
 
 (defun %encode (value output)

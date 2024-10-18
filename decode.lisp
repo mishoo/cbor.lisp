@@ -7,13 +7,12 @@
   (%decode input))
 
 (defmacro unroll-read-byte (size input)
-  `(progn
-     (let ((value 0))
-       (declare (type (integer 0 ,(1- (expt 2 (* 8 size)))) value))
-       ,@(loop for i from (* 8 (1- size)) downto 0 by 8
-               collect `(setf (ldb (byte 8 ,i) value)
-                              (ms-read-byte ,input)))
-       value)))
+  `(let ((value 0))
+     (declare (type (integer 0 ,(1- (expt 2 (* 8 size)))) value))
+     ,@(loop for i from (* 8 (1- size)) downto 0 by 8
+             collect `(setf (ldb (byte 8 ,i) value)
+                            (ms-read-byte ,input)))
+     value))
 
 (defmacro with-tag ((_input _tag) &body body)
   (let ((input (gensym))
@@ -157,7 +156,7 @@
                   for val = (%decode input)
                   do (setf (gethash key hash) val))))
          hash)))
-  ;; (declare (inline maybe-symbol read-alist read-plist read-hash))
+  (declare (inline maybe-symbol read-alist read-plist read-hash))
   (defun read-map (input size &optional indefinite-size)
     (declare (type memstream input)
              (type (integer 0 #.*max-uint64*) size)
@@ -261,7 +260,7 @@
          (funcall *custom-tag-reader* tag (%decode input))
          (error "Unsupported sematic tag ~A" tag)))))
 
-(defun read-float (argument)
+(defun %decode-float (argument)
   (declare #.*optimize*)
   (etypecase argument
     ((unsigned-byte 16) (decode-float16 argument))
@@ -304,4 +303,4 @@
            (6 (read-tagged input argument))
            (7 (if simple?
                   (cons 'simple argument)
-                  (read-float argument)))))))))
+                  (%decode-float argument)))))))))

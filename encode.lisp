@@ -118,7 +118,7 @@
        (%encode (case pak
                   (#.(find-package "KEYWORD") t)
                   ((nil) nil)
-                  (t (package-name pak)))
+                  (otherwise (package-name pak)))
                 output)
        ;; 2. symbol name (string)
        (encode-string (symbol-name symbol) output)))
@@ -157,21 +157,6 @@
           do (%encode key output)
              (%encode val output))))
 
-(defun proper-list-p (list)
-  (loop with p = list and q = (cdr list) do
-    (cond
-      ((null q)
-       (return t))
-      ((or (eq p q)
-           (not (and (listp p)
-                     (listp q))))
-       (return nil)))
-    (setf p (cdr p))
-    (setf q (cdr q))
-    (unless (listp q)
-      (return nil))
-    (setf q (cdr q))))
-
 (defun encode-cons (value output)
   (declare (type cons value)
            (type memstream output)
@@ -190,6 +175,16 @@
   (write-tag 6 +tag-list+ output)
   (write-tag 4 (length list) output)
   (loop for val in list do (%encode val output)))
+
+(defun proper-list-p (list)
+  (loop with p = list and q = (cdr list) do
+    (cond
+      ((null q) (return t))
+      ((or (eq p q) (not (consp q))) (return nil)))
+    (setf p (cdr p)
+          q (cdr q))
+    (unless (listp q) (return nil))
+    (setf q (cdr q))))
 
 (defun encode-list (value output)
   (declare (type cons value)

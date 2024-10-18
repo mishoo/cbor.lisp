@@ -157,7 +157,7 @@
                   for val = (%decode input)
                   do (setf (gethash key hash) val))))
          hash)))
-  (declare (inline maybe-symbol read-alist read-plist read-hash))
+  ;; (declare (inline maybe-symbol read-alist read-plist read-hash))
   (defun read-map (input size &optional indefinite-size)
     (declare (type memstream input)
              (type (integer 0 #.*max-uint64*) size)
@@ -187,7 +187,6 @@
             do (setf (ldb (byte 8 j) val) byte))
       val)))
 
-(declaim (inline read-datetime))
 (defun read-datetime (input)
   (declare (type memstream input)
            #.*optimize*)
@@ -200,7 +199,6 @@
       (local-time:unix-to-timestamp seconds :nsec (floor (* split-seconds
                                                             1000 1000 1000))))))
 
-(declaim (inline read-string-datetime))
 (defun read-string-datetime (input)
   (declare (type memstream input)
            #.*optimize*)
@@ -210,7 +208,31 @@
              "Expecting text string in datetime, but found ~A" type)
      (read-string input argument special?))))
 
-(declaim (inline read-tagged))
+(defun read-symbol (input)
+  (declare (type memstream input)
+           #.*optimize*)
+  (with-tag (input (ms-read-byte input))
+    (assert (and (= type 4) (= argument 2)) (type argument)
+            "Expected array of two elements in read-symbol")
+    (let* ((pak-name (%decode input))
+           (sym-name (%decode input))
+           (package (case pak-name
+                      ((t) #.(find-package "KEYWORD"))
+                      ((nil) nil)
+                      (otherwise (find-package pak-name)))))
+      (if package
+          (intern sym-name package)
+          (make-symbol sym-name)))))
+
+(defun read-cons (input)
+  (declare (type memstream input)
+           #.*optimize*)
+  (with-tag (input (ms-read-byte input))
+    (assert (and (= type 4) (= argument 2)) (type argument)
+            "Expected array of two elements in read-cons")
+    (cons (%decode input)
+          (%decode input))))
+
 (defun read-tagged (input tag)
   (declare (type memstream input)
            (type (integer 0 #.*max-uint64*) tag)
@@ -220,19 +242,36 @@
     (1 (read-datetime input))
     (2 (read-bignum input))
     (3 (- 0 1 (read-bignum input)))
+    (#.+tag-ratio+ (read-ratio input))
+    (#.+tag-symbol+ (read-symbol input))
+    (#.+tag-cons+ (read-cons input))
     (55799 (%decode input))
     (t
      (if *custom-tag-reader*
          (funcall *custom-tag-reader* tag (%decode input))
          (error "Unsupported sematic tag ~A" tag)))))
 
-(declaim (inline read-float))
 (defun read-float (argument)
   (declare #.*optimize*)
   (etypecase argument
     ((unsigned-byte 16) (decode-float16 argument))
     ((unsigned-byte 32) (decode-float32 argument))
     ((unsigned-byte 64) (decode-float64 argument))))
+
+(defun read-ratio (input)
+  (with-tag (input (ms-read-byte input))
+    (assert (and (= type 4) (= argument 2)) (type argument)
+            "Expected array of two integers in read-ratio")
+    (let ((numerator (%decode input))
+          (denominator (%decode input)))
+      (assert (and (typep numerator 'integer)
+                   (typep denominator 'integer))
+              (numerator denominator)
+              "Expected two integers in ratio")
+      (assert (not (zerop denominator))
+              (denominator)
+              "Division by zero in ratio")
+      (/ numerator denominator))))
 
 (defun %decode (input)
   (declare (type memstream input)

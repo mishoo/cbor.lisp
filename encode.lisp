@@ -5,19 +5,16 @@
     (%encode value output)
     (ms-whole-data output)))
 
-(declaim (inline encode-false))
 (defun encode-false (output)
   (declare (type memstream output)
            #.*optimize*)
   (ms-write-byte 244 output))
 
-(declaim (inline encode-true))
 (defun encode-true (output)
   (declare (type memstream output)
            #.*optimize*)
   (ms-write-byte 245 output))
 
-(declaim (inline encode-null))
 (defun encode-null (output)
   (declare (type memstream output)
            #.*optimize*)
@@ -28,7 +25,6 @@
      ,@(loop for i from (* 8 (1- size)) downto 0 by 8
              collect `(ms-write-byte (ldb (byte 8 ,i) ,value) ,output))))
 
-(declaim (inline write-tag))
 (defun write-tag (type argument output)
   (declare (type (unsigned-byte 3) type)
            (type (integer 0 #.*max-uint64*) argument)
@@ -51,21 +47,18 @@
        (ms-write-byte (logior tag 27) output)
        (unroll-write-byte 8 argument output)))))
 
-(declaim (inline encode-positive-integer))
 (defun encode-positive-integer (value output)
   (declare (type (integer 0 #.*max-uint64*) value)
            (type memstream output)
            #.*optimize*)
   (write-tag 0 value output))
 
-(declaim (inline encode-negative-integer))
 (defun encode-negative-integer (value output)
   (declare (type (integer #.*min-uint64* -1) value)
            (type memstream output)
            #.*optimize*)
   (write-tag 1 (1- (- value)) output))
 
-(declaim (inline encode-float))
 (macrolet ((try (bytes encoder decoder)
              `(handler-case
                   (let ((v (,encoder value)))
@@ -90,7 +83,14 @@
         (try 8 encode-float64 decode-float64)
         (error "Can't encode float value: ~A" value))))
 
-(declaim (inline encode-binary))
+;; http://peteroupc.github.io/CBOR/rational.html appears to be
+;; somewhat official.
+(defun encode-ratio (ratio output)
+  (write-tag 6 30 output)
+  (write-tag 4 2 output)                ; array of two values
+  (%encode (numerator ratio) output)
+  (%encode (denominator ratio) output))
+
 (defun encode-binary (seq output)
   (declare (type raw-data seq)
            (type memstream output)
@@ -98,7 +98,6 @@
   (write-tag 2 (length seq) output)
   (ms-write-sequence seq output))
 
-(declaim (inline encode-string))
 (defun encode-string (str output)
   (declare (type string str)
            (type memstream output)
@@ -106,15 +105,27 @@
   (write-tag 3 (trivial-utf-8:utf-8-byte-length str) output)
   (ms-write-sequence (trivial-utf-8:string-to-utf-8-bytes str) output))
 
-(declaim (inline encode-symbol))
-(defun encode-symbol (value output)
-  (declare (type symbol value)
+(defun encode-symbol (symbol output)
+  (declare (type symbol symbol)
            (type memstream output)
            #.*optimize*)
-  (let ((str (if *symbol-to-string*
-                 (funcall *symbol-to-string* value)
-                 (symbol-name value))))
-    (encode-string str output)))
+  (cond
+    (*strict*
+     (write-tag 6 +tag-symbol+ output)
+     (let ((pak (symbol-package symbol)))
+       (write-tag 4 2 output) ;; array with two values
+       ;; 1. package. Encode `t' for KEYWORD, as a shortcut
+       (%encode (case pak
+                  (#.(find-package "KEYWORD") t)
+                  ((nil) nil)
+                  (t (package-name pak)))
+                output)
+       ;; 2. symbol name (string)
+       (encode-string (symbol-name symbol) output)))
+    (t (let ((str (if *symbol-to-string*
+                      (funcall *symbol-to-string* symbol)
+                      (symbol-name symbol))))
+         (encode-string str output)))))
 
 (defun encode-array (value output)
   (declare (type array value)
@@ -146,11 +157,24 @@
           do (%encode key output)
              (%encode val output))))
 
+(defun encode-cons (value output)
+  (declare (type list value)
+           (type memstream output)
+           #.*optimize*)
+  (write-tag 6 +tag-cons+ output)
+  (write-tag 4 2 output)                ; array of 2 elements
+  (%encode (car value) output)
+  (if (consp (cdr value))
+      (encode-cons (cdr value) output)
+      (%encode (cdr value) output)))
+
 (defun encode-list (value output)
   (declare (type list value)
            (type memstream output)
            #.*optimize*)
   (cond
+    (*strict*
+     (encode-cons value output))
     ((eq 'simple (car value))
      (write-tag 7 (cdr value) output))
     ((and *jsown-semantics*
@@ -219,26 +243,39 @@
 (defun %encode (value output)
   (declare (type memstream output)
            #.*optimize*)
+  (unless *strict*
+    (cond
+      ((or (eq value :t)
+           (eq value :true))
+       (setf value t))
+      ((eq value :null)
+       (setf value nil))))
   (case value
-    ((t :t :true) (encode-true output))
-    ((:f :false) (encode-false output))
-    ((:null) (encode-null output))
+    ((t) (encode-true output))
     ((nil) (if *jsown-semantics*
                (write-tag 4 0 output)
                (encode-null output)))
     (otherwise
-     (etypecase value
-       ((integer 0 #.*max-uint64*) (encode-positive-integer value output))
-       ((integer #.*min-uint64* -1) (encode-negative-integer value output))
-       (integer (encode-bignum value output))
-       (float (encode-float value output))
-       (ratio (encode-float (float value) output))
-       (string (encode-string value output))
-       (symbol (encode-symbol value output))
-       (hash-table (encode-hash value output))
-       ((vector (unsigned-byte 8)) (encode-binary (coerce value 'raw-data) output))
-       (vector (encode-array value output))
-       (list (encode-list value output))
-       (standard-object (encode-object value output))
-       (structure-object (encode-object value output)))))
+     (cond
+       ((and (not *strict*)
+             (or (eq value :f)
+                 (eq value :false)))
+        (encode-false output))
+       (t
+        (etypecase value
+          ((integer 0 #.*max-uint64*) (encode-positive-integer value output))
+          ((integer #.*min-uint64* -1) (encode-negative-integer value output))
+          (integer (encode-bignum value output))
+          (float (encode-float value output))
+          (ratio (if *strict*
+                     (encode-ratio value output)
+                     (encode-float (float value) output)))
+          (string (encode-string value output))
+          (symbol (encode-symbol value output))
+          (hash-table (encode-hash value output))
+          ((vector (unsigned-byte 8)) (encode-binary (coerce value 'raw-data) output))
+          (vector (encode-array value output))
+          (list (encode-list value output))
+          (standard-object (encode-object value output))
+          (structure-object (encode-object value output)))))))
   output)

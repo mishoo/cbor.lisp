@@ -173,7 +173,7 @@
     (setf q (cdr q))))
 
 (defun encode-cons (value output)
-  (declare (type list value)
+  (declare (type cons value)
            (type memstream output)
            #.*optimize*)
   (write-tag 6 +tag-cons+ output)
@@ -184,7 +184,7 @@
       (%encode (cdr value) output)))
 
 (defun encode-proper-list (list output)
-  (declare (type list list)
+  (declare (type cons list)
            (type memstream output)
            #.*optimize*)
   (write-tag 6 +tag-list+ output)
@@ -192,7 +192,7 @@
   (loop for val in list do (%encode val output)))
 
 (defun encode-list (value output)
-  (declare (type list value)
+  (declare (type cons value)
            (type memstream output)
            #.*optimize*)
   (cond

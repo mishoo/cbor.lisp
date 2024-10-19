@@ -80,9 +80,9 @@ alone.")
 
 (defmacro with-stringrefs (encoding? &body body)
   `(let ((*stringref-cache*
-           (if ,encoding?
-               (make-hash-table :test #'equal)
-               (make-array 0 :adjustable t :fill-pointer 0))))
+           ,(if encoding?
+                '(make-hash-table :test #'equal)
+                '(make-array 0 :adjustable t :fill-pointer 0))))
      ,@body))
 
 (defun stringref-should-cache (len)

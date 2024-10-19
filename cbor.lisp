@@ -19,6 +19,7 @@
 (defconstant +tag-symbol+ 2000)
 (defconstant +tag-cons+ 2001)
 (defconstant +tag-list+ 2002)
+(defconstant +tag-character+ 2003)
 
 (defparameter *strict* t
   "Strict mode (TODO: document)")

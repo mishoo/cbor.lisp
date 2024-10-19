@@ -241,6 +241,12 @@
     (let ((*array-format* :list))
       (read-array input argument special?))))
 
+(defun read-character (input)
+  (with-tag (input (ms-read-byte input))
+    (assert (= type 0) (type)
+            "Expected unsigned integer in read-character")
+    (code-char argument)))
+
 (defun read-tagged (input tag)
   (declare (type memstream input)
            (type (integer 0 #.*max-uint64*) tag)
@@ -254,6 +260,7 @@
     (#.+tag-symbol+ (read-symbol input))
     (#.+tag-cons+ (read-cons input))
     (#.+tag-list+ (read-proper-list input))
+    (#.+tag-character+ (read-character input))
     (55799 (%decode input))
     (t
      (if *custom-tag-reader*

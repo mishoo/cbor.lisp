@@ -157,6 +157,13 @@
           do (%encode key output)
              (%encode val output))))
 
+(defun encode-character (char output)
+  (declare (type character char)
+           (type memstream output)
+           #.*optimize*)
+  (write-tag 6 +tag-character+ output)
+  (encode-positive-integer (char-code char) output))
+
 (defun encode-cons (value output)
   (declare (type cons value)
            (type memstream output)
@@ -283,6 +290,9 @@
         (encode-false output))
        (t
         (etypecase value
+          (character (if *strict*
+                         (encode-character value output)
+                         (encode-string (string value) output)))
           ((integer 0 #.*max-uint64*) (encode-positive-integer value output))
           ((integer #.*min-uint64* -1) (encode-negative-integer value output))
           (integer (encode-bignum value output))

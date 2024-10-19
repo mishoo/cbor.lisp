@@ -61,7 +61,7 @@
                (format nil "(~:D bytes JSON)" (length seq))
              (let ((input (trivial-utf-8:utf-8-bytes-to-string seq)))
                (setf data1 ,decode-json)))))
-       (let ((seq (mytime "CBOR-ENCODE" "" (encode data1))))
+       (let ((seq (mytime "CBOR-ENCODE" "" (encode data1 :stringrefs t))))
          (with-binary-output (output (format nil "~A-~A.bin.cbor" filename ,title))
            (write-sequence seq output))
          (setf seq (coerce seq 'raw-data))

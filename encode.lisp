@@ -1,8 +1,19 @@
 (in-package #:cbor)
 
-(defun encode (value)
+(defun write-stringref-namespace (output)
+  (declare (type memstream output)
+           #.*optimize*)
+  (write-tag 6 +tag-stringref-namespace+ output))
+
+(defun encode (value &key stringrefs)
   (let ((output (make-memstream)))
-    (%encode value output)
+    (cond
+      (stringrefs
+       (with-stringrefs t
+         (write-stringref-namespace output)
+         (%encode value output)))
+      (t
+       (%encode value output)))
     (ms-whole-data output)))
 
 (defun encode-false (output)
@@ -102,8 +113,16 @@
   (declare (type string str)
            (type memstream output)
            #.*optimize*)
-  (write-tag 3 (trivial-utf-8:utf-8-byte-length str) output)
-  (ms-write-sequence (trivial-utf-8:string-to-utf-8-bytes str) output))
+  (let* ((len (trivial-utf-8:utf-8-byte-length str))
+         (ref (stringref-get str)))
+    (cond
+      (ref                              ; emit stringref
+       (write-tag 6 +tag-stringref+ output)
+       (encode-positive-integer ref output))
+      (t
+       (stringref-assign str len)
+       (write-tag 3 len output)
+       (ms-write-sequence (trivial-utf-8:string-to-utf-8-bytes str) output)))))
 
 (defun encode-symbol (symbol output)
   (declare (type symbol symbol)

@@ -62,26 +62,37 @@
            (type (integer 0 #.*max-uint64*) size)
            (type boolean indefinite-size)
            #.*optimize*)
-  (cond
-    (indefinite-size
-     (loop for tag = (ms-read-byte input)
-           until (= tag 255)
-           collect (with-tag (input tag)
-                     (assert (= type 3) (type)
-                             "Invalid chunk type ~A when reading indefinite-length string"
-                             type)
-                     (assert (not special?) (argument)
-                             "Nested indefinite-length string (argument is 31)")
-                     (read-string input argument))
-             into strings
-           finally (return (apply #'concatenate 'simple-string strings))))
-    (t
-     ;; that's cheating a bit, accessing the underlying data
-     ;; sequence (should have used ms-read-sequence), but oh
-     ;; well.. why cons if we can not cons?
-     (trivial-utf-8:utf-8-bytes-to-string (ms-data input)
-                                          :start (ms-position input)
-                                          :end (incf (ms-position input) size)))))
+  (let ((str
+          (cond
+            (indefinite-size
+             (loop for tag = (ms-read-byte input)
+                   until (= tag 255)
+                   collect (with-tag (input tag)
+                             (assert (= type 3) (type)
+                                     "Invalid chunk type ~A when reading indefinite-length string"
+                                     type)
+                             (assert (not special?) (argument)
+                                     "Nested indefinite-length string (argument is 31)")
+                             (read-string input argument))
+                     into strings
+                   finally (return (apply #'concatenate 'simple-string strings))))
+            (t
+             ;; that's cheating a bit, accessing the underlying data
+             ;; sequence (should have used ms-read-sequence), but oh
+             ;; well.. why cons if we can not cons?
+             (trivial-utf-8:utf-8-bytes-to-string (ms-data input)
+                                                  :start (ms-position input)
+                                                  :end (incf (ms-position input) size))))))
+    (stringref-assign str)
+    str))
+
+(defun read-stringref (input)
+  (declare (type memstream input)
+           #.*optimize*)
+  (with-tag (input (ms-read-byte input))
+    (assert (= type 0) (type)
+            "Expecting unsigned integer in read-stringref")
+    (stringref-get argument)))
 
 (defun read-array (input size &optional indefinite-size)
   (declare (type memstream input)
@@ -256,6 +267,8 @@
     (#.+tag-float-datetime+ (read-datetime input))
     (#.+tag-positive-bignum+ (read-bignum input))
     (#.+tag-negative-bignum+ (- 0 1 (read-bignum input)))
+    (#.+tag-stringref-namespace+ (with-stringrefs nil (%decode input)))
+    (#.+tag-stringref+ (read-stringref input))
     (#.+tag-ratio+ (read-ratio input))
     (#.+tag-symbol+ (read-symbol input))
     (#.+tag-cons+ (read-cons input))

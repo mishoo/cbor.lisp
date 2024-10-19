@@ -37,25 +37,28 @@
            (type (integer 0 #.*max-uint64*) size)
            (type boolean indefinite-size)
            #.*optimize*)
-  (cond
-    (indefinite-size
-     (loop for tag = (ms-read-byte input)
-           until (= tag 255)
-           collect (with-tag (input tag)
-                     (assert (= type 2)
-                             (type)
-                             "Invalid chunk type ~A when reading indefinite-length byte string"
-                             type)
-                     (assert (not special?)
-                             (argument)
-                             "Nested indefinite-length byte string (argument is 31)")
-                     (read-binary input argument))
-             into sequences
-           finally (return (apply #'concatenate 'raw-data sequences))))
-    (t
-     (let ((seq (make-array size :element-type '(unsigned-byte 8))))
-       (ms-read-sequence seq input)
-       seq))))
+  (let ((seq
+          (cond
+            (indefinite-size
+             (loop for tag = (ms-read-byte input)
+                   until (= tag 255)
+                   collect (with-tag (input tag)
+                             (assert (= type 2)
+                                     (type)
+                                     "Invalid chunk type ~A when reading indefinite-length byte string"
+                                     type)
+                             (assert (not special?)
+                                     (argument)
+                                     "Nested indefinite-length byte string (argument is 31)")
+                             (read-binary input argument))
+                     into sequences
+                   finally (return (apply #'concatenate 'raw-data sequences))))
+            (t
+             (let ((seq (make-array size :element-type '(unsigned-byte 8))))
+               (ms-read-sequence seq input)
+               seq)))))
+    (stringref-assign seq (length seq))
+    seq))
 
 (defun read-string (input size &optional indefinite-size)
   (declare (type memstream input)

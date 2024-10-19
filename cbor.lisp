@@ -101,7 +101,7 @@ alone.")
 
 (defun stringref-assign (str &optional
                                (len (trivial-utf-8:utf-8-byte-length str)))
-  (declare (type string str)
+  (declare (type (or string (vector (unsigned-byte 8))) str)
            (type fixnum len)
            #.*optimize*)
   (let ((index (stringref-should-cache len)))

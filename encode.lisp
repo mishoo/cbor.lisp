@@ -106,15 +106,23 @@
   (declare (type raw-data seq)
            (type memstream output)
            #.*optimize*)
-  (write-tag 2 (length seq) output)
-  (ms-write-sequence seq output))
+  (let ((len (length seq))
+        (ref (stringref-get seq)))
+    (cond
+      (ref
+       (write-tag 6 +tag-stringref+ output)
+       (encode-positive-integer ref output))
+      (t
+       (stringref-assign seq len)
+       (write-tag 2 len output)
+       (ms-write-sequence seq output)))))
 
 (defun encode-string (str output)
   (declare (type string str)
            (type memstream output)
            #.*optimize*)
-  (let* ((len (trivial-utf-8:utf-8-byte-length str))
-         (ref (stringref-get str)))
+  (let ((len (trivial-utf-8:utf-8-byte-length str))
+        (ref (stringref-get str)))
     (cond
       (ref                              ; emit stringref
        (write-tag 6 +tag-stringref+ output)

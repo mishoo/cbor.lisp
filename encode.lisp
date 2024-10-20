@@ -92,10 +92,22 @@
 ;; http://peteroupc.github.io/CBOR/rational.html appears to be
 ;; somewhat official.
 (defun encode-ratio (ratio output)
-  (write-tag 6 30 output)
+  (declare (type rational ratio)
+           (type memstream output)
+           #.*optimize*)
+  (write-tag 6 +tag-ratio+ output)
   (write-tag 4 2 output)                ; array of two values
   (%encode (numerator ratio) output)
   (%encode (denominator ratio) output))
+
+(defun encode-complex (value output)
+  (declare (type complex value)
+           (type memstream output)
+           #.*optimize*)
+  (write-tag 6 +tag-complex+ output)
+  (write-tag 4 2 output)                ; array of two values
+  (%encode (realpart value) output)
+  (%encode (imagpart value) output))
 
 (defun encode-binary (seq output)
   (declare (type raw-data seq)
@@ -340,6 +352,7 @@
           (ratio (if *strict*
                      (encode-ratio value output)
                      (encode-float (float value) output)))
+          (complex (encode-complex value output))
           (string (encode-string value output))
           (symbol (encode-symbol value output))
           (hash-table (encode-hash value output))

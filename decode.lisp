@@ -124,15 +124,10 @@
 (defun %unpack-map (input size callback)
   (cond
     (size
-     (loop repeat size do (funcall callback
-                                   (%decode input)
-                                   (%decode input))))
+     (loop repeat size do (funcall callback (%decode input) (%decode input))))
     (t ;; indefinite size
-     (loop for tag = (ms-peek-byte input)
-           until (= tag 255)
-           do (funcall callback
-                       (%decode input)
-                       (%decode input))
+     (loop for tag = (ms-peek-byte input) until (= tag 255)
+           do (funcall callback (%decode input) (%decode input))
            finally (incf (ms-position input))))))
 
 (defmacro build-list (&body body)
@@ -298,6 +293,7 @@
     (#.+tag-stringref-namespace+ (with-stringrefs nil (%decode input)))
     (#.+tag-stringref+ (read-stringref input))
     (#.+tag-ratio+ (read-ratio input))
+    (#.+tag-complex+ (read-complex input))
     (#.+tag-symbol+ (read-symbol input))
     (#.+tag-cons+ (read-cons input))
     (#.+tag-list+ (read-proper-list input))
@@ -331,6 +327,14 @@
               (denominator)
               "Division by zero in ratio")
       (/ numerator denominator))))
+
+(defun read-complex (input)
+  (with-tag (input (ms-read-byte input))
+    (assert (and (= type 4) (= argument 2)) (type argument)
+            "Expected array of two numbers in read-complex")
+    (let ((real (%decode input))
+          (imag (%decode input)))
+      (complex real imag))))
 
 (defun %decode (input)
   (declare (type memstream input)

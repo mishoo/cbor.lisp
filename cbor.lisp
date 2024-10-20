@@ -14,6 +14,7 @@
 (defconstant +tag-negative-bignum+ 3)
 
 (defconstant +tag-ratio+ 30)
+(defconstant +tag-complex+ 43000)
 
 (defconstant +tag-stringref+ 25)
 (defconstant +tag-stringref-namespace+ 256)
@@ -30,7 +31,8 @@
 
 (defparameter *strict* t
   "Strict mode: use the custom tags above for precise serialization of
-various Common Lisp types that are not defined in the core CBOR spec.")
+various Common Lisp types that are not defined in the core CBOR spec.
+A decoder must support these types for proper de-serialization.")
 
 (defparameter *use-stringrefs* t
   "Wether to use the stringrefs extension for encoding

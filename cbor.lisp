@@ -18,14 +18,24 @@
 (defconstant +tag-stringref+ 25)
 (defconstant +tag-stringref-namespace+ 256)
 
+(defconstant +tag-embedded-cbor+ 55799)
+
 ;; our tags
 (defconstant +tag-symbol+ 2000)
 (defconstant +tag-cons+ 2001)
 (defconstant +tag-list+ 2002)
 (defconstant +tag-character+ 2003)
+(defconstant +tag-object+ 2004)
+(defconstant +tag-structure+ 2005)
 
 (defparameter *strict* t
-  "Strict mode (TODO: document)")
+  "Strict mode: use the custom tags above for precise serialization of
+various Common Lisp types that are not defined in the core CBOR spec.")
+
+(defparameter *use-stringrefs* t
+  "Wether to use the stringrefs extension for encoding
+(http://cbor.schmorp.de/stringref). Decoding always supports
+it, if it encounters the tag.")
 
 (defparameter *jsown-semantics* nil
   "Bind this to T if you want encode/decode to use JSOWN's conventions.")

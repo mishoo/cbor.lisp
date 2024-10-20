@@ -1,16 +1,11 @@
 (in-package #:cbor)
 
-(defun write-stringref-namespace (output)
-  (declare (type memstream output)
-           #.*optimize*)
-  (write-tag 6 +tag-stringref-namespace+ output))
-
-(defun encode (value &key stringrefs)
+(defun encode (value &key (stringrefs *use-stringrefs*))
   (let ((output (make-memstream)))
     (cond
       (stringrefs
        (with-stringrefs t
-         (write-stringref-namespace output)
+         (write-tag 6 +tag-stringref-namespace+ output)
          (%encode value output)))
       (t
        (%encode value output)))
@@ -259,10 +254,27 @@
     (:method ((object standard-object) (output memstream))
       (declare (type standard-object object)
                #.*optimize*)
-      (%encode-object))
+      (cond
+        (*strict*
+         (write-tag 6 +tag-object+ output)
+         ;; an object is an array of two elements: class name and
+         ;; slot->value mapping.
+         (write-tag 4 2 output)
+         (encode-symbol (class-name (class-of object)) output)
+         (%encode-object))
+        (t (%encode-object))))
+
     (:method ((object structure-object) (output memstream))
       (declare #.*optimize*)
-      (%encode-object))))
+      (cond
+        (*strict*
+         ;; similar for structures. XXX: I don't know if applying
+         ;; class-of to a structure is standard, but it works in SBCL
+         (write-tag 6 +tag-structure+ output)
+         (write-tag 4 2 output)
+         (encode-symbol (class-name (class-of object)) output)
+         (%encode-object))
+        (t (%encode-object))))))
 
 (defmethod encode-object ((ts local-time:timestamp) (output memstream))
   (let* ((seconds (local-time:timestamp-to-unix ts))

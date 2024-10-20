@@ -61,7 +61,7 @@
                (format nil "(~:D bytes JSON)" (length seq))
              (let ((input (trivial-utf-8:utf-8-bytes-to-string seq)))
                (setf data1 ,decode-json)))))
-       (let ((seq (mytime "CBOR-ENCODE" "" (encode data1 :stringrefs t))))
+       (let ((seq (mytime "CBOR-ENCODE" "" (encode data1))))
          (with-binary-output (output (format nil "~A-~A.bin.cbor" filename ,title))
            (write-sequence seq output))
          (setf seq (coerce seq 'raw-data))
@@ -96,21 +96,25 @@
 
 ;;;
 
-;; (defstruct (dude)
-;;   (first-name "" :type string)
-;;   (last-name "" :type string)
-;;   (age 0 :type fixnum))
+(defstruct (dude)
+  (first-name "" :type string)
+  (last-name "" :type string)
+  (age 0 :type fixnum))
 
-;; (defgeneric create-object (name data)
-;;   (:method ((name (eql :dude)) data)
-;;     (apply #'make-dude data))
-;;   (:method ((name symbol) data)
-;;     data))
+(defclass geometry ()
+  ((x :type fixnum :initarg :x)
+   (y :type fixnum :initarg :y)
+   (width :type fixnum :initarg :width)
+   (height :type fixnum :initarg :height)))
 
-;; (let ((*create-object* #'create-object))
-;;   (test-decode (list (make-dude :first-name "John" :last-name "Doe" :age 44)
-;;                      1
-;;                      (make-dude :first-name "Jane" :last-name "Austin" :age 44))))
+(defclass window ()
+  ((title :type string :initarg :title)
+   (geometry :type geometry :initarg :geometry)
+   (buttons :initform '(:close :minimize :maximize))))
+
+;; (test-decode (list (make-dude :first-name "John" :last-name "Doe" :age 44)
+;;                    1
+;;                    (make-dude :first-name "Jane" :last-name "Austin" :age 40)))
 
 
 

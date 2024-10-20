@@ -121,54 +121,59 @@
                do (setf (aref seq i) (%decode input)))
          seq)))))
 
+(defun %unpack-map (input size callback)
+  (cond
+    (size
+     (loop repeat size do (funcall callback
+                                   (%decode input)
+                                   (%decode input))))
+    (t ;; indefinite size
+     (loop for tag = (ms-peek-byte input)
+           until (= tag 255)
+           do (funcall callback
+                       (%decode input)
+                       (%decode input))
+           finally (incf (ms-position input))))))
+
+(defmacro build-list (&body body)
+  (let ((vlist (gensym))
+        (vp (gensym)))
+    `(let ((,vlist nil)
+           (,vp nil))
+       (flet ((add (el)
+                (let ((cell (cons el nil)))
+                  (setf ,vp (if ,vp
+                                (setf (cdr ,vp) cell)
+                                (setf ,vlist cell))))))
+         (declare (inline add))
+         ,@body
+         ,vlist))))
+
 (labels
     ((maybe-symbol (thing)
        (declare #.*optimize*)
        (if (and (stringp thing) *string-to-symbol*)
            (funcall *string-to-symbol* thing)
            thing))
-     (read-alist (input size &optional indefinite-size)
+     (read-alist (input &optional size)
        (declare #.*optimize*)
-       (cond
-         (indefinite-size
-          (loop for tag = (ms-peek-byte input)
-                until (= tag 255)
-                collect (cons (maybe-symbol (%decode input))
-                              (%decode input))
-                finally (incf (ms-position input))))
-         (t
-          (loop repeat size
-                collect (cons (maybe-symbol (%decode input))
-                              (%decode input))))))
-     (read-plist (input size &optional indefinite-size)
+       (build-list
+         (%unpack-map input size
+                      (lambda (key val)
+                        (add (cons (maybe-symbol key) val))))))
+     (read-plist (input &optional size)
        (declare #.*optimize*)
-       (cond
-         (indefinite-size
-          (loop for tag = (ms-peek-byte input)
-                until (= tag 255)
-                nconc (list (maybe-symbol (%decode input))
-                            (%decode input))
-                finally (incf (ms-position input))))
-         (t
-          (loop repeat size
-                nconc (list (maybe-symbol (%decode input))
-                            (%decode input))))))
-     (read-hash (input size &optional indefinite-size)
+       (build-list
+         (%unpack-map input size
+                      (lambda (key val)
+                        (add (maybe-symbol key))
+                        (add val)))))
+     (read-hash (input &optional size)
        (declare #.*optimize*)
        (let ((hash (make-hash-table :test (if *string-to-symbol* #'eq #'equal))))
-         (cond
-           (indefinite-size
-            (loop for tag = (ms-peek-byte input)
-                  until (= tag 255)
-                  for key = (maybe-symbol (%decode input))
-                  for val = (%decode input)
-                  do (setf (gethash key hash) val)
-                  finally (incf (ms-position input))))
-           (t
-            (loop repeat size
-                  for key = (maybe-symbol (%decode input))
-                  for val = (%decode input)
-                  do (setf (gethash key hash) val))))
+         (%unpack-map input size
+                      (lambda (key val)
+                        (setf (gethash (maybe-symbol key) hash) val)))
          hash)))
   (declare (inline maybe-symbol read-alist read-plist read-hash))
   (defun read-map (input size &optional indefinite-size)
@@ -177,11 +182,11 @@
              (type boolean indefinite-size)
              #.*optimize*)
     (if *jsown-semantics*
-        (cons :obj (read-alist input size indefinite-size))
+        (cons :obj (read-alist input (unless indefinite-size size)))
         (ecase *dictionary-format*
-          (:hash (read-hash input size indefinite-size))
-          (:alist (read-alist input size indefinite-size))
-          (:plist (read-plist input size indefinite-size))))))
+          (:hash (read-hash input (unless indefinite-size size)))
+          (:alist (read-alist input (unless indefinite-size size)))
+          (:plist (read-plist input (unless indefinite-size size)))))))
 
 (defun read-bignum (input)
   (declare (type memstream input)
@@ -261,6 +266,26 @@
             "Expected unsigned integer in read-character")
     (code-char argument)))
 
+(defun read-object (input)
+  (with-tag (input (ms-read-byte input))
+    (assert (and (= type 4) (= argument 2))
+            (type argument)
+            "Expected array of two elements in read-object"))
+  (let* ((name (%decode input)))
+    (assert (symbolp name) (name) "Expected class name (symbol) in read-object")
+    (with-tag (input (ms-read-byte input))
+      (assert (= type 5) (type) "Expected map in read-object")
+      (let* ((class (find-class name))
+             (object (allocate-instance class)))
+        (%unpack-map input
+                     (unless special? argument)
+                     (lambda (key val)
+                       (setf (slot-value object key) val)))
+        object))))
+
+(defun read-structure (input)
+  (read-object input))
+
 (defun read-tagged (input tag)
   (declare (type memstream input)
            (type (integer 0 #.*max-uint64*) tag)
@@ -277,7 +302,9 @@
     (#.+tag-cons+ (read-cons input))
     (#.+tag-list+ (read-proper-list input))
     (#.+tag-character+ (read-character input))
-    (55799 (%decode input))
+    (#.+tag-object+ (read-object input))
+    (#.+tag-structure+ (read-structure input))
+    (#.+tag-embedded-cbor+ (%decode input))
     (t
      (if *custom-tag-reader*
          (funcall *custom-tag-reader* tag (%decode input))

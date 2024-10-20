@@ -206,6 +206,7 @@
   (loop for val in list do (%encode val output)))
 
 (defun proper-list-p (list)
+  (declare #.*optimize*)
   (loop with p = list and q = (cdr list) do
     (cond
       ((null q) (return t))
@@ -238,18 +239,19 @@
      (write-tag 4 (length value) output)
      (loop for val in value do (%encode val output)))))
 
-(macrolet ((%encode-object ()
-             `(let* ((class (class-of object))
-                     (slots (remove-if-not
-                             (lambda (key) (slot-boundp object key))
-                             (mapcar #'closer-mop:slot-definition-name
-                                     (closer-mop:class-direct-slots class)))))
-                (declare (type list slots))
-                (with-dictionary (output (length slots))
-                  (loop for key in slots
-                        for val = (slot-value object key)
-                        do (%encode key output)
-                           (%encode val output))))))
+(flet ((write-slots-map (object output)
+         (let* ((class (class-of object))
+                (slots (remove-if-not
+                        (lambda (key) (slot-boundp object key))
+                        (mapcar #'closer-mop:slot-definition-name
+                                (closer-mop:class-direct-slots class)))))
+           (declare (type list slots))
+           (with-dictionary (output (length slots))
+             (loop for key in slots
+                   for val = (slot-value object key)
+                   do (%encode key output)
+                      (%encode val output))))))
+  (declare (inline write-slots-map))
   (defgeneric encode-object (object output)
     (:method ((object standard-object) (output memstream))
       (declare (type standard-object object)
@@ -261,9 +263,8 @@
          ;; slot->value mapping.
          (write-tag 4 2 output)
          (encode-symbol (class-name (class-of object)) output)
-         (%encode-object))
-        (t (%encode-object))))
-
+         (write-slots-map object output))
+        (t (write-slots-map object output))))
     (:method ((object structure-object) (output memstream))
       (declare #.*optimize*)
       (cond
@@ -273,8 +274,8 @@
          (write-tag 6 +tag-structure+ output)
          (write-tag 4 2 output)
          (encode-symbol (class-name (class-of object)) output)
-         (%encode-object))
-        (t (%encode-object))))))
+         (write-slots-map object output))
+        (t (write-slots-map object output))))))
 
 (defmethod encode-object ((ts local-time:timestamp) (output memstream))
   (let* ((seconds (local-time:timestamp-to-unix ts))

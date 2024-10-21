@@ -256,7 +256,7 @@
                 (slots (remove-if-not
                         (lambda (key) (slot-boundp object key))
                         (mapcar #'closer-mop:slot-definition-name
-                                (closer-mop:class-direct-slots class)))))
+                                (closer-mop:class-slots class)))))
            (declare (type list slots))
            (with-dictionary (output (length slots))
              (loop for key in slots

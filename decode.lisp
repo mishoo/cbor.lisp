@@ -335,7 +335,7 @@
     (#.+tag-character+ (read-character input))
     (#.+tag-object+ (read-object input))
     (#.+tag-structure+ (read-structure input))
-    (#.+tag-embedded-cbor+ (%decode input))
+    (#.+tag-embedded-cbor+ (with-sharedrefs-decode (%decode input)))
     (t
      (if *custom-tag-reader*
          (funcall *custom-tag-reader* tag (%decode input))

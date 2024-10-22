@@ -108,5 +108,5 @@ once. Will return NIL if no duplicates are encountered."
                           (dig name)
                           (dig (slot-value data name)))))))))
       (dig data)
-      (when (>= (hash-table-count refd) 0)
+      (when (plusp (hash-table-count refd))
         refd))))

@@ -237,27 +237,13 @@
             "Expected integer or float in Unix timestamp, found ~A"
             (type-of epoch))
     (multiple-value-bind (seconds split-seconds) (floor epoch)
-      (decode-set-shareable
-       (local-time:unix-to-timestamp seconds :nsec (floor (* split-seconds
-                                                             1000 1000 1000)))))))
-
-(defun expect-string (input)
-  (declare (type memstream input)
-           #.*optimize*)
-  (with-tag (input (ms-read-byte input))
-    (cond
-      ((= type 3)
-       (read-string input argument special?))
-      ((and (= type 6) (= argument +tag-stringref+))
-       (read-stringref input))
-      (t (error "Expecting string")))))
+      (local-time:unix-to-timestamp seconds :nsec (floor (* split-seconds
+                                                            1000 1000 1000))))))
 
 (defun read-string-datetime (input)
   (declare (type memstream input)
            #.*optimize*)
-  (decode-set-shareable
-   (local-time:parse-rfc3339-timestring
-    (expect-string input))))
+  (local-time:parse-rfc3339-timestring (%decode input)))
 
 (defun read-symbol (input)
   (declare (type memstream input)
@@ -265,24 +251,15 @@
   (with-tag (input (ms-read-byte input))
     (assert (and (= type 4) (= argument 2)) (type argument)
             "Expected array of two elements in read-symbol")
-    (let* ((pak-name (cond
-                       ((= 245 (ms-peek-byte input))
-                        (ms-read-byte input)
-                        t)
-                       ((= 246 (ms-peek-byte input))
-                        (ms-read-byte input)
-                        nil)
-                       (t
-                        (expect-string input))))
-           (sym-name (expect-string input))
+    (let* ((pak-name (%decode input))
+           (sym-name (%decode input))
            (package (case pak-name
                       ((t) #.(find-package "KEYWORD"))
                       ((nil) nil)
                       (otherwise (find-package pak-name)))))
-      (decode-set-shareable
-       (if package
-           (intern sym-name package)
-           (make-symbol sym-name))))))
+      (if package
+          (intern sym-name package)
+          (make-symbol sym-name)))))
 
 (defun read-cons (input)
   (declare (type memstream input)
@@ -418,10 +395,8 @@
          (case type
            (0 argument)
            (1 (- 0 1 argument))
-           (2 (decode-set-shareable
-               (read-binary input argument special?)))
-           (3 (decode-set-shareable
-               (read-string input argument special?)))
+           (2 (read-binary input argument special?))
+           (3 (read-string input argument special?))
            (4 (read-array input argument special?))
            (5 (read-map input argument special?))
            (6 (read-tagged input argument))

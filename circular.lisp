@@ -23,7 +23,10 @@
 (defmacro with-decode-shareable (&body body)
   `(progn
      (setf *in-shareable* (vector-push-extend nil *sharedref-cache*))
-     ,@body))
+     (let ((value (progn ,@body)))
+       (unless (aref *sharedref-cache* *in-shareable*)
+         (decode-set-shareable value))
+       value)))
 
 (defun decode-set-shareable (value)
   (when *in-shareable*

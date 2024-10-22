@@ -12,6 +12,8 @@
                #:closer-mop)
   :components ((:file "package")
                (:file "cbor")
+               (:file "stringref")
+               (:file "circular")
                (:file "memstream")
                (:file "encode")
                (:file "decode")))

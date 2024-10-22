@@ -4,7 +4,8 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (deftype raw-data () '(simple-array (unsigned-byte 8) 1))
-  (defparameter *optimize* '(optimize (speed 3) (safety 1) (space 0) (debug 0)))
+  (defparameter *optimize* '(optimize speed (safety 1) (space 0) (debug 0)))
+  ;; (defparameter *optimize* '(optimize (speed 0) (safety 1) (space 0) (debug 3)))
   (defparameter *max-uint64* (1- (expt 2 64)))
   (defparameter *min-uint64* (- (expt 2 64))))
 
@@ -17,6 +18,8 @@
 (defconstant +tag-complex+ 43000)
 
 (defconstant +tag-stringref+ 25)
+(defconstant +tag-shareable+ 28)
+(defconstant +tag-sharedref+ 29)
 (defconstant +tag-stringref-namespace+ 256)
 
 (defconstant +tag-embedded-cbor+ 55799)
@@ -38,6 +41,11 @@ A decoder must support these types for proper de-serialization.")
   "Wether to use the stringrefs extension for encoding
 (http://cbor.schmorp.de/stringref). Decoding always supports
 it, if it encounters the tag.")
+
+(defparameter *use-sharedrefs* t
+  "Wether to use the shared value extension for
+encoding (http://cbor.schmorp.de/value-sharing). Decoding always
+supports it if it encounters the tags.")
 
 (defparameter *jsown-semantics* nil
   "Bind this to T if you want encode/decode to use JSOWN's conventions.")
@@ -84,48 +92,3 @@ alone.")
 (ieee-floats:make-float-converters encode-float16 decode-float16 5 10 nil)
 (import '(ieee-floats:encode-float32 ieee-floats:decode-float32
           ieee-floats:encode-float64 ieee-floats:decode-float64))
-
-;;; stringref utilities
-;;; http://cbor.schmorp.de/stringref
-
-(defparameter *stringref-cache* nil)
-
-(defmacro with-stringrefs (encoding? &body body)
-  `(let ((*stringref-cache*
-           ,(if encoding?
-                '(make-hash-table :test #'equal)
-                '(make-array 0 :adjustable t :fill-pointer 0))))
-     ,@body))
-
-(defun stringref-should-cache (len)
-  (declare (type fixnum len)
-           #.*optimize*)
-  (when *stringref-cache*
-    (let ((index (if (hash-table-p *stringref-cache*)
-                     (hash-table-count *stringref-cache*)
-                     (length *stringref-cache*))))
-      (when (or (>= len 11)
-                (and (<=     0 index         23) (>= len 3))
-                (and (<=    24 index        255) (>= len 4))
-                (and (<=   256 index      65535) (>= len 5))
-                (and (<= 65536 index 4294967295) (>= len 7)))
-        index))))
-
-(defun stringref-assign (str &optional
-                               (len (trivial-utf-8:utf-8-byte-length str)))
-  (declare (type (or string (vector (unsigned-byte 8))) str)
-           (type fixnum len)
-           #.*optimize*)
-  (let ((index (stringref-should-cache len)))
-    (when index
-      (if (hash-table-p *stringref-cache*)
-          (setf (gethash str *stringref-cache*) index)
-          (vector-push-extend str *stringref-cache*)))))
-
-(defun stringref-get (thing)
-  (when *stringref-cache*
-    (if (hash-table-p *stringref-cache*)
-        (gethash thing *stringref-cache*)
-        (if (< thing (length *stringref-cache*))
-            (aref *stringref-cache* thing)
-            (error "Index out of bounds in stringref cache (~A)" thing)))))

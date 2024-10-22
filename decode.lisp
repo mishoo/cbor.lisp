@@ -1,10 +1,10 @@
 (in-package #:cbor)
 
 (defun decode (input)
-  (declare (type (or memstream raw-data) input))
   (unless (memstream-p input)
     (setf input (make-memstream input)))
-  (%decode input))
+  (with-sharedrefs-decode
+    (%decode input)))
 
 (defmacro unroll-read-byte (size input)
   `(let ((value 0))
@@ -97,6 +97,41 @@
             "Expecting unsigned integer in read-stringref")
     (stringref-get argument)))
 
+;; the reason why I made the inner `add' a macro is that its argument
+;; will typically involve a call to %decode, and we must delay it
+;; until after the first cons has been created and recorded with
+;; decode-set-shareable, so that circular references will work (just
+;; in case %decode encounters another shareable object).
+(defmacro build-list (&body body)
+  (let ((vlist (gensym))
+        (vp (gensym)))
+    `(let ((,vlist nil)
+           (,vp nil))
+       (macrolet
+           ((add (el)
+              `(let ((cell (cons nil nil)))
+                 (setf ,',vp (if ,',vp
+                                 (setf (cdr ,',vp) cell)
+                                 (setf ,',vlist
+                                       (decode-set-shareable cell))))
+                 (setf (car cell) ,el)
+                 cell)))
+         ,@body
+         ,vlist))))
+
+(defun read-entries (input size callback)
+  (declare (type memstream input)
+           (type (or null fixnum) size)
+           (type (function ()) callback)
+           #.*optimize*)
+  (cond
+    (size
+     (loop repeat size do (funcall callback)))
+    (t ;; indefinite size
+     (loop for tag = (ms-peek-byte input) until (= tag 255)
+           do (funcall callback)
+           finally (incf (ms-position input))))))
+
 (defun read-array (input size &optional indefinite-size)
   (declare (type memstream input)
            (type (integer 0 #.*max-uint64*) size)
@@ -105,44 +140,30 @@
   (let ((wants-list (or *jsown-semantics* (eq *array-format* :list))))
     (cond
       (indefinite-size
-       (loop for tag = (ms-peek-byte input)
-             for length of-type fixnum from 0
-             until (= tag 255)
-             collect (%decode input) into entries
-             finally (incf (ms-position input))
-                     (return (if wants-list
-                                 entries
-                                 (make-array length :initial-contents entries)))))
+       (cond
+         (wants-list
+          (build-list
+            (read-entries input nil
+                          (lambda ()
+                            (add (%decode input))))))
+         (t
+          (let ((seq (make-array 0 :adjustable t :fill-pointer 0)))
+            (decode-set-shareable seq)
+            (read-entries input nil
+                          (lambda ()
+                            (vector-push-extend (%decode input) seq)))
+            seq))))
+
       (wants-list
-       (loop repeat size collect (%decode input)))
+       (build-list
+         (loop repeat size do (add (%decode input)))))
+
       (t
        (let ((seq (make-array size)))
+         (decode-set-shareable seq)
          (loop for i below size
                do (setf (aref seq i) (%decode input)))
          seq)))))
-
-(defun %unpack-map (input size callback)
-  (cond
-    (size
-     (loop repeat size do (funcall callback (%decode input) (%decode input))))
-    (t ;; indefinite size
-     (loop for tag = (ms-peek-byte input) until (= tag 255)
-           do (funcall callback (%decode input) (%decode input))
-           finally (incf (ms-position input))))))
-
-(defmacro build-list (&body body)
-  (let ((vlist (gensym))
-        (vp (gensym)))
-    `(let ((,vlist nil)
-           (,vp nil))
-       (flet ((add (el)
-                (let ((cell (cons el nil)))
-                  (setf ,vp (if ,vp
-                                (setf (cdr ,vp) cell)
-                                (setf ,vlist cell))))))
-         (declare (inline add))
-         ,@body
-         ,vlist))))
 
 (labels
     ((maybe-symbol (thing)
@@ -153,22 +174,25 @@
      (read-alist (input &optional size)
        (declare #.*optimize*)
        (build-list
-         (%unpack-map input size
-                      (lambda (key val)
-                        (add (cons (maybe-symbol key) val))))))
+         (read-entries input size
+                      (lambda ()
+                        (add (cons (maybe-symbol (%decode input))
+                                   (%decode input)))))))
      (read-plist (input &optional size)
        (declare #.*optimize*)
        (build-list
-         (%unpack-map input size
-                      (lambda (key val)
-                        (add (maybe-symbol key))
-                        (add val)))))
+         (read-entries input size
+                      (lambda ()
+                        (add (maybe-symbol (%decode input)))
+                        (add (%decode input))))))
      (read-hash (input &optional size)
        (declare #.*optimize*)
        (let ((hash (make-hash-table :test (if *string-to-symbol* #'eq #'equal))))
-         (%unpack-map input size
-                      (lambda (key val)
-                        (setf (gethash (maybe-symbol key) hash) val)))
+         (decode-set-shareable hash)
+         (read-entries input size
+                      (lambda ()
+                        (setf (gethash (maybe-symbol (%decode input)) hash)
+                              (%decode input))))
          hash)))
   (declare (inline maybe-symbol read-alist read-plist read-hash))
   (defun read-map (input size &optional indefinite-size)
@@ -177,7 +201,11 @@
              (type boolean indefinite-size)
              #.*optimize*)
     (if *jsown-semantics*
-        (cons :obj (read-alist input (unless indefinite-size size)))
+        (let ((obj (list :obj)))
+          (decode-set-shareable obj)
+          (setf (cdr obj)
+                (read-alist input (unless indefinite-size size)))
+          obj)
         (ecase *dictionary-format*
           (:hash (read-hash input (unless indefinite-size size)))
           (:alist (read-alist input (unless indefinite-size size)))
@@ -209,17 +237,27 @@
             "Expected integer or float in Unix timestamp, found ~A"
             (type-of epoch))
     (multiple-value-bind (seconds split-seconds) (floor epoch)
-      (local-time:unix-to-timestamp seconds :nsec (floor (* split-seconds
-                                                            1000 1000 1000))))))
+      (decode-set-shareable
+       (local-time:unix-to-timestamp seconds :nsec (floor (* split-seconds
+                                                             1000 1000 1000)))))))
+
+(defun expect-string (input)
+  (declare (type memstream input)
+           #.*optimize*)
+  (with-tag (input (ms-read-byte input))
+    (cond
+      ((= type 3)
+       (read-string input argument special?))
+      ((and (= type 6) (= argument +tag-stringref+))
+       (read-stringref input))
+      (t (error "Expecting string")))))
 
 (defun read-string-datetime (input)
   (declare (type memstream input)
            #.*optimize*)
-  (local-time:parse-rfc3339-timestring
-   (with-tag (input (ms-read-byte input))
-     (assert (= type 3) (type)
-             "Expecting text string in datetime, but found ~A" type)
-     (read-string input argument special?))))
+  (decode-set-shareable
+   (local-time:parse-rfc3339-timestring
+    (expect-string input))))
 
 (defun read-symbol (input)
   (declare (type memstream input)
@@ -227,15 +265,24 @@
   (with-tag (input (ms-read-byte input))
     (assert (and (= type 4) (= argument 2)) (type argument)
             "Expected array of two elements in read-symbol")
-    (let* ((pak-name (%decode input))
-           (sym-name (%decode input))
+    (let* ((pak-name (cond
+                       ((= 245 (ms-peek-byte input))
+                        (ms-read-byte input)
+                        t)
+                       ((= 246 (ms-peek-byte input))
+                        (ms-read-byte input)
+                        nil)
+                       (t
+                        (expect-string input))))
+           (sym-name (expect-string input))
            (package (case pak-name
                       ((t) #.(find-package "KEYWORD"))
                       ((nil) nil)
                       (otherwise (find-package pak-name)))))
-      (if package
-          (intern sym-name package)
-          (make-symbol sym-name)))))
+      (decode-set-shareable
+       (if package
+           (intern sym-name package)
+           (make-symbol sym-name))))))
 
 (defun read-cons (input)
   (declare (type memstream input)
@@ -243,8 +290,11 @@
   (with-tag (input (ms-read-byte input))
     (assert (and (= type 4) (= argument 2)) (type argument)
             "Expected array of two elements in read-cons")
-    (cons (%decode input)
-          (%decode input))))
+    (let ((cell (cons nil nil)))
+      (decode-set-shareable cell)
+      (setf (car cell) (%decode input)
+            (cdr cell) (%decode input))
+      cell)))
 
 (defun read-proper-list (input)
   (declare (type memstream input)
@@ -256,12 +306,16 @@
       (read-array input argument special?))))
 
 (defun read-character (input)
+  (declare (type memstream input)
+           #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (assert (= type 0) (type)
             "Expected unsigned integer in read-character")
     (code-char argument)))
 
 (defun read-object (input)
+  (declare (type memstream input)
+           #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (assert (and (= type 4) (= argument 2))
             (type argument)
@@ -272,10 +326,12 @@
       (assert (= type 5) (type) "Expected map in read-object")
       (let* ((class (find-class name))
              (object (allocate-instance class)))
-        (%unpack-map input
-                     (unless special? argument)
-                     (lambda (key val)
-                       (setf (slot-value object key) val)))
+        (decode-set-shareable object)
+        (read-entries input
+                      (unless special? argument)
+                      (lambda ()
+                        (setf (slot-value object (%decode input))
+                              (%decode input))))
         object))))
 
 (defun read-structure (input)
@@ -292,6 +348,8 @@
     (#.+tag-negative-bignum+ (- 0 1 (read-bignum input)))
     (#.+tag-stringref-namespace+ (with-stringrefs nil (%decode input)))
     (#.+tag-stringref+ (read-stringref input))
+    (#.+tag-sharedref+ (decode-get-shareable (%decode input)))
+    (#.+tag-shareable+ (with-decode-shareable (%decode input)))
     (#.+tag-ratio+ (read-ratio input))
     (#.+tag-complex+ (read-complex input))
     (#.+tag-symbol+ (read-symbol input))
@@ -314,6 +372,8 @@
     ((unsigned-byte 64) (decode-float64 argument))))
 
 (defun read-ratio (input)
+  (declare (type memstream input)
+           #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (assert (and (= type 4) (= argument 2)) (type argument)
             "Expected array of two integers in read-ratio")
@@ -329,6 +389,8 @@
       (/ numerator denominator))))
 
 (defun read-complex (input)
+  (declare (type memstream input)
+           #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (assert (and (= type 4) (= argument 2)) (type argument)
             "Expected array of two numbers in read-complex")
@@ -350,8 +412,10 @@
          (case type
            (0 argument)
            (1 (- 0 1 argument))
-           (2 (read-binary input argument special?))
-           (3 (read-string input argument special?))
+           (2 (decode-set-shareable
+               (read-binary input argument special?)))
+           (3 (decode-set-shareable
+               (read-string input argument special?)))
            (4 (read-array input argument special?))
            (5 (read-map input argument special?))
            (6 (read-tagged input argument))

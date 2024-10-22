@@ -2,13 +2,14 @@
 
 (defun encode (value &key (stringrefs *use-stringrefs*))
   (let ((output (make-memstream)))
-    (cond
-      (stringrefs
-       (with-stringrefs t
-         (write-tag 6 +tag-stringref-namespace+ output)
-         (%encode value output)))
-      (t
-       (%encode value output)))
+    (with-sharedrefs-encode value
+      (cond
+        (stringrefs
+         (with-stringrefs t
+           (write-tag 6 +tag-stringref-namespace+ output)
+           (%encode value output)))
+        (t
+         (%encode value output))))
     (ms-whole-data output)))
 
 (defun encode-false (output)
@@ -205,9 +206,11 @@
   (write-tag 6 +tag-cons+ output)
   (write-tag 4 2 output)                ; array of 2 elements
   (%encode (car value) output)
-  (if (consp (cdr value))
-      (encode-cons (cdr value) output)
-      (%encode (cdr value) output)))
+  (let ((tail (cdr value)))
+    (if (consp tail)
+        (encode-maybe-shared (tail output)
+          (encode-cons tail output))
+        (%encode tail output))))
 
 (defun encode-proper-list (list output)
   (declare (type cons list)
@@ -222,10 +225,17 @@
   (loop with p = list and q = (cdr list) do
     (cond
       ((null q) (return t))
-      ((or (eq p q) (not (consp q))) (return nil)))
+      ((or (eq p q)
+           (not (consp q))
+           (shared-value q))
+       (return nil)))
     (setf p (cdr p)
           q (cdr q))
-    (unless (listp q) (return nil))
+    (cond
+      ((null q) (return t))
+      ((or (not (consp q))
+           (shared-value q))
+       (return nil)))
     (setf q (cdr q))))
 
 (defun encode-list (value output)
@@ -342,23 +352,46 @@
         (encode-false output))
        (t
         (etypecase value
-          (character (if *strict*
-                         (encode-character value output)
-                         (encode-string (string value) output)))
-          ((integer 0 #.*max-uint64*) (encode-positive-integer value output))
-          ((integer #.*min-uint64* -1) (encode-negative-integer value output))
-          (integer (encode-bignum value output))
-          (float (encode-float value output))
-          (ratio (if *strict*
-                     (encode-ratio value output)
-                     (encode-float (float value) output)))
-          (complex (encode-complex value output))
-          (string (encode-string value output))
-          (symbol (encode-symbol value output))
-          (hash-table (encode-hash value output))
-          ((vector (unsigned-byte 8)) (encode-binary (coerce value 'raw-data) output))
-          (vector (encode-array value output))
-          (list (encode-list value output))
-          (standard-object (encode-object value output))
-          (structure-object (encode-object value output)))))))
+          (character
+           (if *strict*
+               (encode-character value output)
+               (encode-string (string value) output)))
+          ((integer 0 #.*max-uint64*)
+           (encode-positive-integer value output))
+          ((integer #.*min-uint64* -1)
+           (encode-negative-integer value output))
+          (integer
+           (encode-bignum value output))
+          (float
+           (encode-float value output))
+          (ratio
+           (if *strict*
+               (encode-ratio value output)
+               (encode-float (float value) output)))
+          (complex
+           (encode-complex value output))
+          (string
+           (encode-maybe-shared (value output)
+             (encode-string value output)))
+          (symbol
+           (encode-maybe-shared (value output)
+             (encode-symbol value output)))
+          (hash-table
+           (encode-maybe-shared (value output)
+             (encode-hash value output)))
+          ((vector (unsigned-byte 8))
+           (encode-maybe-shared (value output)
+             (encode-binary (coerce value 'raw-data) output)))
+          (vector
+           (encode-maybe-shared (value output)
+             (encode-array value output)))
+          (list
+           (encode-maybe-shared (value output)
+             (encode-list value output)))
+          (standard-object
+           (encode-maybe-shared (value output)
+             (encode-object value output)))
+          (structure-object
+           (encode-maybe-shared (value output)
+             (encode-object value output))))))))
   output)

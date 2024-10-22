@@ -12,7 +12,9 @@
     data))
 
 (defun test-decode (value &rest args)
-  (decode (apply #'test-encode value args)))
+  (let ((v2 (decode (apply #'test-encode value args))))
+    ;; (format t "EQUAL? ~A" (equal value v2))
+    v2))
 
 (defun dumphash (hash)
   (loop for key being the hash-key using (hash-value val) of hash

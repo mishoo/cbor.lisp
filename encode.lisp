@@ -70,8 +70,8 @@
              `(handler-case
                   (let ((v (,encoder value)))
                     (when (= value (,decoder v))
-                      (ms-write-byte (logior #b11100000
-                                             ,(ecase bytes
+                      (ms-write-byte ,(logior #b11100000
+                                              (ecase bytes
                                                 (2 25)
                                                 (4 26)
                                                 (8 27)))
@@ -284,7 +284,7 @@
          ;; an object is an array of two elements: class name and
          ;; slot->value mapping.
          (write-tag 4 2 output)
-         (encode-symbol (class-name (class-of object)) output)
+         (%encode (class-name (class-of object)) output)
          (write-slots-map object output))
         (t (write-slots-map object output))))
     (:method ((object structure-object) (output memstream))
@@ -295,7 +295,7 @@
          ;; class-of to a structure is standard, but it works in SBCL
          (write-tag 6 +tag-structure+ output)
          (write-tag 4 2 output)
-         (encode-symbol (class-name (class-of object)) output)
+         (%encode (class-name (class-of object)) output)
          (write-slots-map object output))
         (t (write-slots-map object output))))))
 

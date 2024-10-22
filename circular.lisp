@@ -105,6 +105,7 @@ once. Will return NIL if no duplicates are encountered."
              ((or standard-object structure-object)
               (when (mark data)
                 (let ((class (class-of data)))
+                  (mark (class-name class))
                   (loop for slot in (closer-mop:class-slots class)
                         for name = (closer-mop:slot-definition-name slot)
                         when (slot-boundp data name) do

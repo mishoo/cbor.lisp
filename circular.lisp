@@ -24,13 +24,14 @@
   `(progn
      (setf *in-shareable* (vector-push-extend nil *sharedref-cache*))
      (let ((value (progn ,@body)))
-       (unless (aref *sharedref-cache* *in-shareable*)
+       (when *in-shareable*
          (decode-set-shareable value))
        value)))
 
 (defun decode-set-shareable (value)
   (when *in-shareable*
-    (setf (aref *sharedref-cache* *in-shareable*) value))
+    (setf (aref *sharedref-cache* *in-shareable*) value
+          *in-shareable* nil))
   value)
 
 (defun decode-get-shareable (index)

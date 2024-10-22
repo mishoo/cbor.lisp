@@ -349,7 +349,7 @@
     (#.+tag-stringref-namespace+ (with-stringrefs nil (%decode input)))
     (#.+tag-stringref+ (read-stringref input))
     (#.+tag-sharedref+ (decode-get-shareable (%decode input)))
-    (#.+tag-shareable+ (with-decode-shareable (%decode input)))
+    (#.+tag-shareable+ (with-decode-shareable (%decode-no-shareable input)))
     (#.+tag-ratio+ (read-ratio input))
     (#.+tag-complex+ (read-complex input))
     (#.+tag-symbol+ (read-symbol input))
@@ -399,6 +399,12 @@
       (complex real imag))))
 
 (defun %decode (input)
+  (declare (type memstream input)
+           #.*optimize*)
+  (let ((*in-shareable* nil))
+    (%decode-no-shareable input)))
+
+(defun %decode-no-shareable (input)
   (declare (type memstream input)
            #.*optimize*)
   (let ((tag (ms-read-byte input)))

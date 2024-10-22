@@ -156,11 +156,11 @@
                   (otherwise (package-name pak)))
                 output)
        ;; 2. symbol name (string)
-       (encode-string (symbol-name symbol) output)))
+       (%encode (symbol-name symbol) output)))
     (t (let ((str (if *symbol-to-string*
                       (funcall *symbol-to-string* symbol)
                       (symbol-name symbol))))
-         (encode-string str output)))))
+         (%encode str output)))))
 
 (defun encode-array (value output)
   (declare (type array value)

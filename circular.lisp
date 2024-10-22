@@ -86,7 +86,10 @@ once. Will return NIL if no duplicates are encountered."
              (string
               (mark data))
              (symbol
-              (mark data))
+              (when (mark data)
+                (let ((pak (symbol-package data)))
+                  (when pak (dig (package-name pak))))
+                (dig (symbol-name data))))
              ((vector (unsigned-byte 8))
               (mark data))
              (hash-table

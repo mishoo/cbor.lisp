@@ -243,12 +243,12 @@
            (type memstream output)
            #.*optimize*)
   (cond
+    ((eq 'simple (car value))
+     (write-tag 7 (cdr value) output))
     (*strict*
      (if (proper-list-p value)
          (encode-proper-list value output)
          (encode-cons value output)))
-    ((eq 'simple (car value))
-     (write-tag 7 (cdr value) output))
     ((and *jsown-semantics*
           (eq :obj (car value)))
      (encode-alist (cdr value) output))

@@ -150,7 +150,7 @@
             (read-entries input nil
                           (lambda ()
                             (vector-push-extend (%decode input) seq)))
-            seq))))
+            (copy-seq seq)))))
 
       (wants-list
        (build-list

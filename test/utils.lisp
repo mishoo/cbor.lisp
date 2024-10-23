@@ -18,15 +18,7 @@
 (defun equals (a b)
   (equals:equals a b :recursive t :check-properties nil))
 
-(define-test core
-  (setf *strict* t
-        *string-to-symbol* nil
-        *symbol-to-string* nil
-        *dictionary-format* :hash
-        *use-stringrefs* nil
-        *use-sharedrefs* nil))
-
-(defmacro cbor-test (hex roundtrip expected)
+(defmacro t-decode (hex roundtrip expected)
   `(let* ((bin (bytes ,hex))
           (val (cbor:decode bin)))
      (is equals ,expected val)
@@ -34,7 +26,13 @@
         `(let ((data (cbor:encode val)))
            (is equals bin data ,hex)))))
 
-(defun cbor-test-date (hex expected)
+(defmacro t-encode (data &body body)
+  `(let* ((data ,data)
+          (bin (cbor:encode data))
+          (val (cbor:decode bin)))
+     ,@body))
+
+(defun t-decode-date (hex expected)
   (let* ((bin (bytes hex))
          (val (cbor:decode bin)))
     (setf expected (local-time:parse-rfc3339-timestring expected))

@@ -4,7 +4,8 @@
   :license  "MIT"
   :version "0.0.1"
   :serial t
-  :depends-on (#:cbor #:parachute #:yason #:equals #:local-time)
+  :depends-on (#:cbor #:parachute #:yason #:equals #:local-time #:alexandria)
   :components ((:file "test/package")
                (:file "test/utils")
-               (:file "test/core")))
+               (:file "test/core")
+               (:file "test/clext")))

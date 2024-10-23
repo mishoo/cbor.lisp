@@ -276,8 +276,10 @@
   (with-tag (input (ms-read-byte input))
     (unless (= type 4)
       (error "Expected array in read-proper-list"))
-    (let ((*array-format* :list))
-      (read-array input argument special?))))
+    (build-list
+      (read-entries input (unless special? argument)
+                    (lambda ()
+                      (add (%decode input)))))))
 
 (defun read-character (input)
   (declare (type memstream input)

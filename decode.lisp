@@ -335,9 +335,6 @@
                               (%decode input))))
         object))))
 
-(defun read-structure (input)
-  (read-object input))
-
 (defun read-tagged (input tag)
   (declare (type memstream input)
            (type (integer 0 #.*max-uint64*) tag)
@@ -360,7 +357,6 @@
     (#.+tag-list+ (read-proper-list input))
     (#.+tag-character+ (read-character input))
     (#.+tag-object+ (read-object input))
-    (#.+tag-structure+ (read-structure input))
     (#.+tag-cbor+ (with-sharedrefs-decode (%decode input)))
     (#.+tag-encoded-cbor+ (read-encoded-cbor input))
     (t

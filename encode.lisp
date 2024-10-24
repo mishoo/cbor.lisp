@@ -266,43 +266,35 @@
      (write-tag 4 (length value) output)
      (loop for val in value do (%encode val output)))))
 
-(flet ((write-slots-map (object output)
-         (let* ((class (class-of object))
-                (slots (remove-if-not
-                        (lambda (key) (slot-boundp object key))
-                        (mapcar #'closer-mop:slot-definition-name
-                                (closer-mop:class-slots class)))))
-           (declare (type list slots))
-           (with-dictionary (output (length slots))
-             (loop for key in slots
-                   for val = (slot-value object key)
-                   do (%encode key output)
-                      (%encode val output))))))
+(labels
+    ((write-slots-map (object output)
+       (let* ((class (class-of object))
+              (slots (remove-if-not
+                      (lambda (key) (slot-boundp object key))
+                      (mapcar #'closer-mop:slot-definition-name
+                              (closer-mop:class-slots class)))))
+         (declare (type list slots))
+         (with-dictionary (output (length slots))
+           (loop for key in slots
+                 for val = (slot-value object key)
+                 do (%encode key output)
+                    (%encode val output)))))
+     (write-object (object output)
+       (cond
+         (*strict*
+          (write-tag 6 +tag-object+ output)
+          ;; an object is an array of two elements: class name and
+          ;; slot->value mapping.
+          (write-tag 4 2 output)
+          (%encode (class-name (class-of object)) output)
+          (write-slots-map object output))
+         (t (write-slots-map object output)))))
   (declare (inline write-slots-map))
   (defgeneric encode-object (object output)
     (:method ((object standard-object) (output memstream))
-      (declare (type standard-object object)
-               #.*optimize*)
-      (cond
-        (*strict*
-         (write-tag 6 +tag-object+ output)
-         ;; an object is an array of two elements: class name and
-         ;; slot->value mapping.
-         (write-tag 4 2 output)
-         (%encode (class-name (class-of object)) output)
-         (write-slots-map object output))
-        (t (write-slots-map object output))))
+      (write-object object output))
     (:method ((object structure-object) (output memstream))
-      (declare #.*optimize*)
-      (cond
-        (*strict*
-         ;; similar for structures. XXX: I don't know if applying
-         ;; class-of to a structure is standard, but it works in SBCL
-         (write-tag 6 +tag-structure+ output)
-         (write-tag 4 2 output)
-         (%encode (class-name (class-of object)) output)
-         (write-slots-map object output))
-        (t (write-slots-map object output))))))
+      (write-object object output))))
 
 (defmethod encode-object ((ts local-time:timestamp) (output memstream))
   (let* ((seconds (local-time:timestamp-to-unix ts))

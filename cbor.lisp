@@ -33,7 +33,6 @@
 (defconstant +tag-list+ 2002)
 (defconstant +tag-character+ 2003)
 (defconstant +tag-object+ 2004)
-(defconstant +tag-structure+ 2005)
 
 (defparameter *strict* t
   "Strict mode: use the custom tags above for precise serialization of

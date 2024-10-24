@@ -243,8 +243,13 @@
            (type memstream output)
            #.*optimize*)
   (cond
-    ((eq 'simple (car value))
+    ((eq 'cbor-simple (car value))
      (write-tag 7 (cdr value) output))
+    ((eq 'cbor-encoded (car value))
+     (write-tag 6 +tag-embedded-cbor+ output)
+     (if (typep (cdr value) 'raw-data)
+         (encode-binary (cdr value) output)
+         (encode-binary (encode (cdr value)) output)))
     (*strict*
      (if (proper-list-p value)
          (encode-proper-list value output)

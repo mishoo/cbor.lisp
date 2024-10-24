@@ -226,6 +226,22 @@
             do (setf (ldb (byte 8 j) val) byte))
       val)))
 
+(defun read-decimal-fraction (input &optional (base 10))
+  (declare (type memstream input)
+           (type fixnum base)
+           #.*optimize*)
+  (with-tag (input (ms-read-byte input))
+    (unless (and (= type 4) (= argument 2))
+      (error "Expected array of two integers in read-decimal-fraction"))
+    (let ((exponent (%decode input))
+          (mantissa (%decode input)))
+      (check-type exponent integer)
+      (check-type mantissa integer)
+      (* mantissa (expt base exponent)))))
+
+(defun read-bigfloat (input)
+  (read-decimal-fraction input 2))
+
 (defun read-datetime (input)
   (declare (type memstream input)
            #.*optimize*)
@@ -241,6 +257,14 @@
   (declare (type memstream input)
            #.*optimize*)
   (local-time:parse-rfc3339-timestring (%decode input)))
+
+(defun read-encoded-cbor (input)
+  (declare (type memstream input)
+           #.*optimize*)
+  (with-tag (input (ms-read-byte input))
+    (unless (= type 2)
+      (error "Expected binary sequence in read-encoded-cbor"))
+    (cons 'cbor-encoded (read-binary input argument special?))))
 
 (defun read-symbol (input)
   (declare (type memstream input)
@@ -323,6 +347,8 @@
     (#.+tag-float-datetime+ (read-datetime input))
     (#.+tag-positive-bignum+ (read-bignum input))
     (#.+tag-negative-bignum+ (- 0 1 (read-bignum input)))
+    (#.+tag-decimal-fraction+ (read-decimal-fraction input))
+    (#.+tag-bigfloat+ (read-bigfloat input))
     (#.+tag-stringref-namespace+ (with-stringrefs nil (%decode input)))
     (#.+tag-stringref+ (read-stringref input))
     (#.+tag-sharedref+ (decode-get-shareable (%decode input)))
@@ -335,7 +361,8 @@
     (#.+tag-character+ (read-character input))
     (#.+tag-object+ (read-object input))
     (#.+tag-structure+ (read-structure input))
-    (#.+tag-embedded-cbor+ (with-sharedrefs-decode (%decode input)))
+    (#.+tag-cbor+ (with-sharedrefs-decode (%decode input)))
+    (#.+tag-encoded-cbor+ (read-encoded-cbor input))
     (t
      (if *custom-tag-reader*
          (funcall *custom-tag-reader* tag (%decode input))
@@ -399,5 +426,5 @@
            (5 (read-map input argument special?))
            (6 (read-tagged input argument))
            (7 (if simple?
-                  (cons 'simple argument)
+                  (cons 'cbor-simple argument)
                   (%decode-float argument)))))))))

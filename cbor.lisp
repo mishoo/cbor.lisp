@@ -13,6 +13,9 @@
 (defconstant +tag-float-datetime+ 1)
 (defconstant +tag-positive-bignum+ 2)
 (defconstant +tag-negative-bignum+ 3)
+(defconstant +tag-decimal-fraction+ 4)
+(defconstant +tag-bigfloat+ 5)
+(defconstant +tag-encoded-cbor+ 24)
 
 (defconstant +tag-ratio+ 30)
 (defconstant +tag-complex+ 43000)
@@ -22,7 +25,7 @@
 (defconstant +tag-sharedref+ 29)
 (defconstant +tag-stringref-namespace+ 256)
 
-(defconstant +tag-embedded-cbor+ 55799)
+(defconstant +tag-cbor+ 55799)
 
 ;; our tags
 (defconstant +tag-symbol+ 2000)

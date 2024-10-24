@@ -46,9 +46,9 @@
   (t-decode "f5" t t)     ;; true
   (t-decode "f6" t nil)   ;; null
   (t-decode "f7" nil nil) ;; undefined (no roundtrip)
-  (t-decode "f0" t '(cbor::simple . 16))
-  (t-decode "f818" t '(cbor::simple . 24))
-  (t-decode "f8ff" t '(cbor::simple . 255))
+  (t-decode "f0" t '(cbor::cbor-simple . 16))
+  (t-decode "f818" t '(cbor::cbor-simple . 24))
+  (t-decode "f8ff" t '(cbor::cbor-simple . 255))
   (t-decode-date "c074323031332d30332d32315432303a30343a30305a"
                   "2013-03-21T22:04:00.000000+02:00")
   (t-decode-date "c11a514b67b0" "2013-03-21T22:04:00.000000+02:00")

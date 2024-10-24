@@ -385,10 +385,7 @@
           (list
            (encode-maybe-shared (value output)
              (encode-list value output)))
-          (standard-object
-           (encode-maybe-shared (value output)
-             (encode-object value output)))
-          (structure-object
+          ((or standard-object structure-object)
            (encode-maybe-shared (value output)
              (encode-object value output))))))))
   output)

@@ -11,10 +11,9 @@
 
 (defun objects-equal (a b)
   (let* ((ca (class-of a))
-         (cb (class-of b))
-         (slots (closer-mop:class-slots ca)))
+         (cb (class-of b)))
     (when (equals ca cb)
-      (loop for slot in slots
+      (loop for slot in (closer-mop:class-slots ca)
             for name = (closer-mop:slot-definition-name slot)
             always (or (and (not (slot-boundp a name))
                             (not (slot-boundp b name)))

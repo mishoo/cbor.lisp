@@ -88,6 +88,12 @@
       (true (eq (slot1-of (cdr val))
                 (car val))))))
 
+(define-test (clext circular-object)
+  (let ((a (make-instance 'testclass)))
+    (setf (slot1-of a) a)
+    (t-encode a
+      (true (eq val (slot1-of val))))))
+
 (define-test (clext circular-cons)
   (let ((a (cons nil nil)))
     (setf (car a) a (cdr a) a)
@@ -95,7 +101,13 @@
       (true (eq val (car val)))
       (true (eq val (cdr val))))))
 
-(define-test (clext circular-array)
+(define-test (clext circular-array-1)
+  (let ((a (vector nil)))
+    (setf (aref a 0) a)
+    (t-encode a
+      (true (eq val (aref val 0))))))
+
+(define-test (clext circular-array-2)
   (let ((a (vector 1 2 nil)))
     (setf (aref a 2) a)
     (t-encode a
@@ -108,13 +120,25 @@
       ;; can't use (last val) here.
       (true (eq val (cdddr val))))))
 
-(define-test (clext circular-hash)
+(define-test (clext circular-hash-1)
+  (let ((hash (make-hash-table)))
+    (setf (gethash :self hash) hash)
+    (t-encode hash
+      (true (eq val (gethash :self val))))))
+
+(define-test (clext circular-hash-2)
   (let ((hash (alexandria:copy-hash-table #${ "foo": 1, "bar": 2 })))
     (setf (gethash 'self hash) hash)
     (t-encode hash
       (is equals 1 (gethash "foo" val))
       (is equals 2 (gethash "bar" val))
       (true (eq val (gethash 'self val))))))
+
+(define-test (clext circular-hash-3)
+  (let ((hash (make-hash-table)))
+    (setf (gethash hash hash) hash)
+    (t-encode hash
+      (true (eq val (gethash val val))))))
 
 (define-test (clext circular-list-array)
   (let* ((a (vector 1 2 nil))

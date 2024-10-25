@@ -166,7 +166,7 @@
 (labels
     ((maybe-symbol (thing)
        (declare #.*optimize*)
-       (if (and (stringp thing) *string-to-symbol*)
+       (if (and (not *strict*) (stringp thing) *string-to-symbol*)
            (funcall *string-to-symbol* thing)
            thing))
      (read-alist (input &optional size)
@@ -185,7 +185,13 @@
                          (add (%decode input))))))
      (read-hash (input &optional size)
        (declare #.*optimize*)
-       (let ((hash (make-hash-table :test (if *string-to-symbol* #'eq #'equal))))
+       (let* ((test (if (and (not *strict*)
+                             *string-to-symbol*)
+                        #'eql
+                        #'equal))
+              (hash (if size
+                        (make-hash-table :size size :test test)
+                        (make-hash-table :test test))))
          (decode-set-shareable hash)
          (read-entries input size
                        (lambda ()

@@ -270,9 +270,9 @@
   (declare (type memstream input)
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
-    (unless (and (= type 4) (= argument 2))
-      (error "Expected array of two elements in read-symbol"))
-    (let* ((pak-name (%decode input))
+    (unless (and (= type 4) (<= 1 argument 2))
+      (error "Expected array of one or two elements in read-symbol"))
+    (let* ((pak-name (when (= argument 2) (%decode input)))
            (sym-name (%decode input))
            (package (case pak-name
                       ((t) #.(find-package "KEYWORD"))

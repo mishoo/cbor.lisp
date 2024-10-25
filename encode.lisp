@@ -148,13 +148,13 @@
     (*strict*
      (write-tag 6 +tag-symbol+ output)
      (let ((pak (symbol-package symbol)))
-       (write-tag 4 2 output) ;; array with two values
+       (write-tag 4 (if pak 2 1) output) ;; array with two values
        ;; 1. package. Encode `t' for KEYWORD, as a shortcut
-       (%encode (case pak
-                  (#.(find-package "KEYWORD") t)
-                  ((nil) nil)
-                  (otherwise (package-name pak)))
-                output)
+       (when pak
+         (%encode (case pak
+                    (#.(find-package "KEYWORD") t)
+                    (otherwise (package-name pak)))
+                  output))
        ;; 2. symbol name (string)
        (%encode (symbol-name symbol) output)))
     (t (let ((str (if *symbol-to-string*

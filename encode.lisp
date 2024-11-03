@@ -201,10 +201,15 @@
            #.*optimize*)
   (flet ((write-items (list n tail)
            (write-tag 6 +tag-list+ output)
-           (write-tag 4 (1+ n) output)
-           (loop repeat n for item in list
-                 do (%encode item output))
-           (%encode tail output)))
+           (cond
+             ((and (null tail) (= 1 n))
+              (write-tag 4 1 output)
+              (%encode (car list) output))
+             (t
+              (write-tag 4 (1+ n) output)
+              (loop repeat n for item in list
+                    do (%encode item output))
+              (%encode tail output)))))
     (loop for count fixnum from 1
           for j = (cdr list) then (cdr j)
           until (or (null j)

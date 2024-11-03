@@ -307,10 +307,12 @@
     (when special?
       (error "Encountered indefinite length array in read-list*"))
     ;; `argument' is the length including tail.
+    (setf special? (= argument 1))
     (build-list
       (read-entries input argument
                     (lambda ()
-                      (if (zerop (decf argument))
+                      (if (and (not special?)
+                               (zerop (decf argument)))
                           (set-tail (%decode input))
                           (add (%decode input))))))))
 

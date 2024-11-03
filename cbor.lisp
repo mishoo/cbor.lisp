@@ -29,10 +29,9 @@
 
 ;; our tags
 (defconstant +tag-symbol+ 55)
-(defconstant +tag-cons+ 56)
-(defconstant +tag-list+ 57)
-(defconstant +tag-character+ 58)
-(defconstant +tag-object+ 59)
+(defconstant +tag-list+ 56)
+(defconstant +tag-character+ 57)
+(defconstant +tag-object+ 58)
 
 (defparameter *strict* t
   "Strict mode: use the custom tags above for precise serialization of

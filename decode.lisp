@@ -113,7 +113,9 @@
                                  (setf ,',vlist
                                        (decode-set-shareable cell))))
                  (setf (car cell) ,el)
-                 cell)))
+                 cell))
+            (set-tail (tail)
+              `(setf (cdr ,',vp) ,tail)))
          ,@body
          ,vlist))))
 
@@ -275,41 +277,42 @@
 (defun read-symbol (input)
   (declare (type memstream input)
            #.*optimize*)
-  (with-tag (input (ms-read-byte input))
-    (unless (and (= type 4) (<= 1 argument 2))
-      (error "Expected array of one or two elements in read-symbol"))
-    (let* ((pak-name (when (= argument 2) (%decode input)))
-           (sym-name (%decode input))
-           (package (case pak-name
-                      ((t) #.(find-package "KEYWORD"))
-                      ((nil) nil)
-                      (otherwise (find-package pak-name)))))
-      (if package
-          (intern sym-name package)
-          (make-symbol sym-name)))))
+  ;; We expect a string, or an array of one or two elements, but
+  ;; shared refs makes it hard to validate data before reading it. So
+  ;; let's just decode the data item and validate after.
+  (let ((data (%decode input)))
+    (typecase data
+      (string (intern data #.(find-package "KEYWORD")))
+      ((vector * 1)
+       (unless (stringp (aref data 0))
+         (error "Expected string in read-symbol"))
+       (make-symbol (aref data 0)))
+      ((vector * 2)
+       (when (and (aref data 0) (not (stringp (aref data 0))))
+         (error "Expected string in read-symbol (package name)"))
+       (unless (stringp (aref data 1))
+         (error "Expected string in read-symbol (symbol name)"))
+       (if (aref data 0)
+           (intern (aref data 1) (find-package (aref data 0)))
+           (make-symbol (aref data 1))))
+      (t
+       (error "Invalid symbol encoding ~A" (type-of data))))))
 
-(defun read-cons (input)
-  (declare (type memstream input)
-           #.*optimize*)
-  (with-tag (input (ms-read-byte input))
-    (unless (and (= type 4) (= argument 2))
-      (error "Expected array of two elements in read-cons"))
-    (let ((cell (cons nil nil)))
-      (decode-set-shareable cell)
-      (setf (car cell) (%decode input)
-            (cdr cell) (%decode input))
-      cell)))
-
-(defun read-proper-list (input)
+(defun read-list* (input)
   (declare (type memstream input)
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (= type 4)
-      (error "Expected array in read-proper-list"))
+      (error "Expected array in read-list*"))
+    (when special?
+      (error "Encountered indefinite length array in read-list*"))
+    ;; `argument' is the length including tail.
     (build-list
-      (read-entries input (unless special? argument)
+      (read-entries input argument
                     (lambda ()
-                      (add (%decode input)))))))
+                      (if (zerop (decf argument))
+                          (set-tail (%decode input))
+                          (add (%decode input))))))))
 
 (defun read-character (input)
   (declare (type memstream input)
@@ -359,8 +362,7 @@
     (#.+tag-ratio+ (read-ratio input))
     (#.+tag-complex+ (read-complex input))
     (#.+tag-symbol+ (read-symbol input))
-    (#.+tag-cons+ (read-cons input))
-    (#.+tag-list+ (read-proper-list input))
+    (#.+tag-list+ (read-list* input))
     (#.+tag-character+ (read-character input))
     (#.+tag-object+ (read-object input))
     (#.+tag-cbor+ (with-sharedrefs-decode (%decode input)))

@@ -148,14 +148,10 @@
     (*strict*
      (write-tag 6 +tag-symbol+ output)
      (let ((pak (symbol-package symbol)))
-       (write-tag 4 (if pak 2 1) output) ;; array with two values
-       ;; 1. package. Encode `t' for KEYWORD, as a shortcut
-       (when pak
-         (%encode (case pak
-                    (#.(find-package "KEYWORD") t)
-                    (otherwise (package-name pak)))
-                  output))
-       ;; 2. symbol name (string)
+       (unless (eq pak #.(find-package "KEYWORD"))
+         (write-tag 4 (if pak 2 1) output) ;; array
+         (when pak
+           (%encode (package-name pak) output)))
        (%encode (symbol-name symbol) output)))
     (t (let ((str (if *symbol-to-string*
                       (funcall *symbol-to-string* symbol)
@@ -199,44 +195,22 @@
   (write-tag 6 +tag-character+ output)
   (encode-positive-integer (char-code char) output))
 
-(defun encode-cons (value output)
-  (declare (type cons value)
-           (type memstream output)
-           #.*optimize*)
-  (write-tag 6 +tag-cons+ output)
-  (write-tag 4 2 output)                ; array of 2 elements
-  (%encode (car value) output)
-  (let ((tail (cdr value)))
-    (if (consp tail)
-        (encode-maybe-shared (tail output)
-          (encode-cons tail output))
-        (%encode tail output))))
-
-(defun encode-proper-list (list output)
+(defun encode-list* (list output)
   (declare (type cons list)
            (type memstream output)
            #.*optimize*)
-  (write-tag 6 +tag-list+ output)
-  (write-tag 4 (length list) output)
-  (loop for val in list do (%encode val output)))
-
-(defun proper-list-p (list)
-  (declare #.*optimize*)
-  (loop with p = list and q = (cdr list) do
-    (cond
-      ((null q) (return t))
-      ((or (eq p q)
-           (not (consp q))
-           (shared-value q))
-       (return nil)))
-    (setf p (cdr p)
-          q (cdr q))
-    (cond
-      ((null q) (return t))
-      ((or (not (consp q))
-           (shared-value q))
-       (return nil)))
-    (setf q (cdr q))))
+  (flet ((write-items (list n tail)
+           (write-tag 6 +tag-list+ output)
+           (write-tag 4 (1+ n) output)
+           (loop repeat n for item in list
+                 do (%encode item output))
+           (%encode tail output)))
+    (loop for count fixnum from 1
+          for j = (cdr list) then (cdr j)
+          until (or (null j)
+                    (not (consp j))
+                    (shared-value j))
+          finally (write-items list count j))))
 
 (defun encode-list (value output)
   (declare (type cons value)
@@ -251,9 +225,7 @@
          (encode-binary (cdr value) output)
          (encode-binary (encode (cdr value)) output)))
     (*strict*
-     (if (proper-list-p value)
-         (encode-proper-list value output)
-         (encode-cons value output)))
+     (encode-list* value output))
     ((and *jsown-semantics*
           (eq :obj (car value)))
      (encode-alist (cdr value) output))

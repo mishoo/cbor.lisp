@@ -44,10 +44,14 @@
                    until (= tag 255)
                    collect (with-tag (input tag)
                              (unless (= type 2)
-                               (error "Invalid chunk type ~A when reading indefinite-length byte string"
-                                      type))
+                               (decode-error
+                                   ("Invalid chunk type ~A when reading indefinite-length byte string"
+                                    type)
+                                   input))
                              (when special?
-                               (error "Nested indefinite-length byte string (argument is 31)"))
+                               (decode-error
+                                   ("Nested indefinite-length byte string (argument is 31)")
+                                   input))
                              (read-binary input argument))
                      into sequences
                    finally (return (apply #'concatenate 'raw-data sequences))))
@@ -70,10 +74,14 @@
                    until (= tag 255)
                    collect (with-tag (input tag)
                              (unless (= type 3)
-                               (error "Invalid chunk type ~A when reading indefinite-length string"
-                                      type))
+                               (decode-error
+                                   ("Invalid chunk type ~A when reading indefinite-length string"
+                                    type)
+                                   input))
                              (when special?
-                               (error "Nested indefinite-length string (argument is 31)"))
+                               (decode-error
+                                   ("Nested indefinite-length string (argument is 31)")
+                                   input))
                              (read-string input argument))
                      into strings
                    finally (return (apply #'concatenate 'simple-string strings))))
@@ -92,8 +100,9 @@
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (= type 0)
-      (error "Expecting unsigned integer in read-stringref"))
-    (stringref-get argument)))
+      (decode-error ("Expecting unsigned integer in read-stringref")))
+    (or (stringref-get argument)
+        (decode-error ("Index out of bounds in stringref cache (~A)" argument) input))))
 
 ;; the reason why I made the inner `add' a macro is that its argument
 ;; will typically involve a call to %decode, and we must delay it
@@ -222,7 +231,7 @@
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (= type 2)
-      (error "Expected binary sequence in bignum, found ~A" type))
+      (decode-error ("Expected binary sequence in bignum, found ~A" type) input))
     (let ((seq (read-binary input argument special?))
           (val 0))
       (declare (type raw-data seq)
@@ -240,7 +249,7 @@
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (and (= type 4) (= argument 2))
-      (error "Expected array of two integers in read-decimal-fraction"))
+      (decode-error ("Expected array of two integers in read-decimal-fraction") input))
     (let ((exponent (%decode input))
           (mantissa (%decode input)))
       (check-type exponent integer)
@@ -255,8 +264,10 @@
            #.*optimize*)
   (let ((epoch (%decode input)))
     (unless (typep epoch '(or integer float))
-      (error "Expected integer or float in Unix timestamp, found ~A"
-             (type-of epoch)))
+      (decode-error
+          ("Expected integer or float in Unix timestamp, found ~A"
+           (type-of epoch))
+          input))
     (multiple-value-bind (seconds split-seconds) (floor epoch)
       (local-time:unix-to-timestamp seconds :nsec (floor (* split-seconds
                                                             1000 1000 1000))))))
@@ -271,7 +282,7 @@
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (= type 2)
-      (error "Expected binary sequence in read-encoded-cbor"))
+      (decode-error ("Expected binary sequence in read-encoded-cbor") input))
     (cons 'cbor-encoded (read-binary input argument special?))))
 
 (defun read-symbol (input)
@@ -285,27 +296,27 @@
       (string (intern data #.(find-package "KEYWORD")))
       ((vector * 1)
        (unless (stringp (aref data 0))
-         (error "Expected string in read-symbol"))
+         (decode-error ("Expected string in read-symbol") input))
        (make-symbol (aref data 0)))
       ((vector * 2)
        (when (and (aref data 0) (not (stringp (aref data 0))))
-         (error "Expected string in read-symbol (package name)"))
+         (decode-error ("Expected string in read-symbol (package name)") input))
        (unless (stringp (aref data 1))
-         (error "Expected string in read-symbol (symbol name)"))
+         (decode-error ("Expected string in read-symbol (symbol name)") input))
        (if (aref data 0)
            (intern (aref data 1) (find-package (aref data 0)))
            (make-symbol (aref data 1))))
       (t
-       (error "Invalid symbol encoding ~A" (type-of data))))))
+       (decode-error ("Invalid symbol encoding ~A" (type-of data)) input)))))
 
 (defun read-list* (input)
   (declare (type memstream input)
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (= type 4)
-      (error "Expected array in read-list*"))
+      (decode-error ("Expected array in read-list*") input))
     (when special?
-      (error "Encountered indefinite length array in read-list*"))
+      (decode-error ("Encountered indefinite length array in read-list*") input))
     ;; `argument' is the length including tail.
     (setf special? (= argument 1))
     (build-list
@@ -321,7 +332,7 @@
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (= type 0)
-      (error "Expected unsigned integer in read-character"))
+      (decode-error ("Expected unsigned integer in read-character") input))
     (code-char argument)))
 
 (defun read-object (input)
@@ -329,13 +340,13 @@
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (and (= type 4) (= argument 2))
-      (error "Expected array of two elements in read-object")))
+      (decode-error ("Expected array of two elements in read-object") input)))
   (let* ((name (%decode input)))
     (unless (symbolp name)
-      (error "Expected class name (symbol) in read-object"))
+      (decode-error ("Expected class name (symbol) in read-object") input))
     (with-tag (input (ms-read-byte input))
       (unless (= type 5)
-        (error "Expected map in read-object"))
+        (decode-error ("Expected map in read-object") input))
       (let* ((class (find-class name))
              (object (allocate-instance class)))
         (decode-set-shareable object)
@@ -359,7 +370,10 @@
     (#.+tag-bigfloat+ (read-bigfloat input))
     (#.+tag-stringref-namespace+ (with-stringrefs nil (%decode input)))
     (#.+tag-stringref+ (read-stringref input))
-    (#.+tag-sharedref+ (decode-get-shareable (%decode input)))
+    (#.+tag-sharedref+
+     (let ((index (%decode input)))
+       (or (decode-get-shareable index)
+           (decode-error ("Shared ref index out of bounds (~D)" index) input))))
     (#.+tag-shareable+ (with-decode-shareable (%decode-no-shareable input)))
     (#.+tag-ratio+ (read-ratio input))
     (#.+tag-complex+ (read-complex input))
@@ -372,7 +386,7 @@
     (t
      (if *custom-tag-reader*
          (funcall *custom-tag-reader* tag (%decode input))
-         (error "Unsupported sematic tag ~A" tag)))))
+         (decode-error ("Unsupported sematic tag ~A" tag) input)))))
 
 (defun %decode-float (argument)
   (declare #.*optimize*)
@@ -386,14 +400,14 @@
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (and (= type 4) (= argument 2))
-      (error "Expected array of two integers in read-ratio"))
+      (decode-error ("Expected array of two integers in read-ratio") input))
     (let ((numerator (%decode input))
           (denominator (%decode input)))
       (unless (and (typep numerator 'integer)
                    (typep denominator 'integer))
-        (error "Expected two integers in ratio"))
+        (decode-error ("Expected two integers in ratio") input))
       (when (zerop denominator)
-        (error "Division by zero in ratio"))
+        (decode-error ("Division by zero in ratio") input))
       (/ numerator denominator))))
 
 (defun read-complex (input)
@@ -401,7 +415,7 @@
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (and (= type 4) (= argument 2))
-      (error "Expected array of two numbers in read-complex"))
+      (decode-error ("Expected array of two numbers in read-complex") input))
     (let ((real (%decode input))
           (imag (%decode input)))
       (complex real imag))))

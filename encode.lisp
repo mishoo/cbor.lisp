@@ -88,7 +88,7 @@
     (or (try 2 encode-float16 decode-float16)
         (try 4 encode-float32 decode-float32)
         (try 8 encode-float64 decode-float64)
-        (error "Can't encode float value: ~A" value))))
+        (encode-error ("Can't encode float value: ~A" value)))))
 
 ;; http://peteroupc.github.io/CBOR/rational.html appears to be
 ;; somewhat official.

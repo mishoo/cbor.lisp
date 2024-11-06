@@ -12,6 +12,7 @@
                #:closer-mop)
   :components ((:file "package")
                (:file "cbor")
+               (:file "errors")
                (:file "stringref")
                (:file "circular")
                (:file "memstream")

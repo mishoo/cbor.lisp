@@ -36,9 +36,8 @@
 
 (defun decode-get-shareable (index)
   (declare (type (integer 0 #.most-positive-fixnum) index))
-  (unless (< index (length *sharedref-cache*))
-    (error "Shared ref index out of bounds (~D)" index))
-  (aref *sharedref-cache* index))
+  (when (< index (length *sharedref-cache*))
+    (aref *sharedref-cache* index)))
 
 (defmacro encode-maybe-shared ((_value _output) &body body)
   (let ((value (gensym))

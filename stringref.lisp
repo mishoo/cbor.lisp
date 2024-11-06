@@ -41,6 +41,5 @@
   (when *stringref-cache*
     (if (hash-table-p *stringref-cache*)
         (gethash thing *stringref-cache*)
-        (if (< thing (length *stringref-cache*))
-            (aref *stringref-cache* thing)
-            (error "Index out of bounds in stringref cache (~A)" thing)))))
+        (when (< thing (length *stringref-cache*))
+          (aref *stringref-cache* thing)))))

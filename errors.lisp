@@ -12,13 +12,13 @@
   ())
 
 (defmacro encode-error ((text &rest format-args) &optional stream position)
-  `(make-condition 'cbor-encode-error
-                   :text (funcall #'format nil ,text ,@format-args)
-                   :stream ,stream
-                   :position ,(or position (if stream `(ms-position ,stream)))))
+  `(error 'cbor-encode-error
+          :text (funcall #'format nil ,text ,@format-args)
+          :stream ,stream
+          :position ,(or position (if stream `(ms-position ,stream)))))
 
 (defmacro decode-error ((text &rest format-args) &optional stream position)
-  `(make-condition 'cbor-decode-error
-                   :text (funcall #'format nil ,text ,@format-args)
-                   :stream ,stream
-                   :position ,(or position (if stream `(ms-position ,stream)))))
+  `(error 'cbor-decode-error
+          :text (funcall #'format nil ,text ,@format-args)
+          :stream ,stream
+          :position ,(or position (if stream `(ms-position ,stream)))))

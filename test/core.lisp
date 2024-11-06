@@ -45,7 +45,7 @@
   (t-decode "f4" nil nil) ;; false (no roundtrip - encoding it back produces null)
   (t-decode "f5" t t)     ;; true
   (t-decode "f6" t nil)   ;; null
-  (t-decode "f7" nil nil) ;; undefined (no roundtrip)
+  (t-decode "f7" t 'cbor::cbor-undefined) ;; undefined
   (t-decode "f0" t '(cbor::cbor-simple . 16))
   (t-decode "f818" t '(cbor::cbor-simple . 24))
   (t-decode "f8ff" t '(cbor::cbor-simple . 255))

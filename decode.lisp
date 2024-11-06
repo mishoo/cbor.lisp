@@ -353,8 +353,10 @@
         (read-entries input
                       (unless special? argument)
                       (lambda ()
-                        (setf (slot-value object (%decode input))
-                              (%decode input))))
+                        (let ((slot (%decode input))
+                              (value (%decode input)))
+                          (unless (eq value 'cbor-undefined)
+                            (setf (slot-value object slot) value)))))
         object))))
 
 (defun read-tagged (input tag)
@@ -434,7 +436,8 @@
       (244 nil)                         ; false
       (245 t)                           ; true
       (246 nil)                         ; null
-      (247 nil)                         ; undefined
+      (247                              ; undefined
+       (if *strict* 'cbor-undefined nil))
       (otherwise
        (with-tag (input tag)
          (case type

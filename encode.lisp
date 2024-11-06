@@ -22,6 +22,11 @@
            #.*optimize*)
   (ms-write-byte 245 output))
 
+(defun encode-undefined (output)
+  (declare (type memstream output)
+           #.*optimize*)
+  (ms-write-byte 247 output))
+
 (defun encode-null (output)
   (declare (type memstream output)
            #.*optimize*)
@@ -348,8 +353,11 @@
            (encode-maybe-shared (value output)
              (encode-string value output)))
           (symbol
-           (encode-maybe-shared (value output)
-             (encode-symbol value output)))
+           (cond
+             ((eq value 'cbor-undefined)
+              (encode-undefined output))
+             (t (encode-maybe-shared (value output)
+                  (encode-symbol value output)))))
           (hash-table
            (encode-maybe-shared (value output)
              (encode-hash value output)))

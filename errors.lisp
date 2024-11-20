@@ -3,7 +3,9 @@
 (define-condition cbor-error (error)
   ((text :initarg :text :reader error-text)
    (stream :initarg :stream :reader error-stream)
-   (position :initarg :position :reader error-position)))
+   (position :initarg :position :reader error-position))
+  (:report (lambda (condition out)
+             (write-string (error-text condition) out))))
 
 (define-condition cbor-decode-error (cbor-error)
   ())

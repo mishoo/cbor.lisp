@@ -1,0 +1,145 @@
+CBOR extensions for Lisp and other dynamic languages
+====================================================
+
+SUMMARY
+
+| Tag | Description | Data item        |
+|-----+-------------+------------------|
+|  55 | Symbol      | STRING or ARRAY  |
+|  56 | Linked list | ARRAY            |
+|  57 | Character   | UNSIGNED INTEGER |
+|  58 | Object      | ARRAY            |
+
+These tags help for more precise serialization of several data structures
+typically used in Lisp, but also in many other languages, the goal being
+that on deserialization we get back an isomorphic data structure.
+
+In this specification, when we mention NULL, UNDEFINED, INTEGER, STRING,
+ARRAY or MAP we refer to the basic CBOR data types. In particular, the last
+three should be of definite length, that is, encoders should avoid producing
+the streaming variants, and decoders may signal an error when they encounter
+indefinite length structures.
+
+
+
+
+1. TAG 55: SYMBOL
+
+A Lisp symbol. Note that many other languages have a Symbol type [1].
+
+1.1. Data item: STRING or ARRAY (clarified below)
+
+When the data item is a STRING, it is the NAME of the symbol.
+
+When it's an array, it can have one or two elements:
+
+    [ NAME ] or [ PACKAGE, NAME ]
+
+- NAME is a string — the Symbol name.
+
+- PACKAGE can be a string, or NULL.
+
+In many languages, symbols can belong to repositories (called "packages" in
+Common Lisp). We say that the symbol is "interned" into the package. In such
+case, PACKAGE will be the package name (STRING).
+
+For uninterned symbols, the data item can be an array with only one element
+(the symbol NAME), or it can have two elements and PACKAGE will be NULL.
+
+Some languages support a "central" symbol repository, and reckoning that
+such symbols may be more prevalent than uninterned symbols, we offer a
+shortcut representation - the data item will be directly a STRING, the
+symbol NAME. For example, in Common Lisp such symbols would be interned into
+the KEYWORD package. In JavaScript, a decoder would use `Symbol.for` [2] to
+register the symbol. Scheme too has the notion of keyword symbols [3],
+although the exact syntax depends on the implementation. A decoder should
+produce what is most sensible for the target language.
+
+
+
+
+2. TAG 56: LIST
+
+A tag for pairs / linked lists. This data type can be used to represent a
+wide range of structures, from simple lists to trees, graphs, sparse
+matrices etc.
+
+2.1. Data item: ARRAY
+
+Items except the last one pack consecutive list elements. The last item is
+special - the tail of the list. In this context, NULL marks the end of the
+list (empty tail).
+
+In the examples here, by `LIST` and `LIST*` we mean an array tagged as this
+node. In notation, we include the asterisk when there is at least one
+element, as this tag works similarly to the Common Lisp construct `list*`,
+which builds a list given a few elements and its tail.
+
+When the length is 2, this tag is effectively behaving like a pair (usually
+called "cons" in Lisp). A simple encoder may chose to always use pairs to
+represent a linked list, so the list (1 2 3 4) can be encoded as:
+
+    LIST*[1, LIST*[2, LIST*[3, LIST*[4, NULL]]]]
+
+However, provided that no part of the structure is shared with other values,
+an encoder may prefer to use the more compact encoding:
+
+    LIST*[1, 2, 3, 4, NULL]
+
+By convention, the empty list can be represented as LIST[] (empty array). In
+Common Lisp this would simply read back as NIL, but in other languages (such
+as Scheme) the distinction might be important. A Scheme encoder may
+therefore opt to use LIST[] instead of NULL to mark the end of the list /
+empty tail. However, a proper decoder must treat NULL in tail position as
+empty list (end of list).
+
+The tail is implied to be empty when the array has exactly one element.
+
+Examples:
+
+    ()                    => LIST[]
+    (1)                   => LIST*[1] or LIST*[1, NULL]
+    (1 2)                 => LIST*[1, 2, NULL]
+    (1 . 2)               => LIST*[1, 2]
+    (1 2 3)               => LIST*[1, 2, 3, NULL]
+    (1 2 . 3)             => LIST*[1, 2, 3]
+    ((1 . 2) (3 . 4))     => LIST*[LIST*[1, 2], LIST*[3, 4], NULL]
+    ((1 . 2) . (3 . 4))   => LIST*[LIST*[1, 2], LIST*[3, 4]]
+
+
+
+
+3. TAG 57: Character
+
+A single Unicode character
+
+3.1. Data item: UNSIGNED INTEGER
+
+The Unicode code point.
+
+
+
+
+4. TAG 58: Object
+
+A fully constructed object.
+
+4.1. Data item: ARRAY (2) [ SYMBOL, MAP   ]
+                            CLASS   SLOTS
+
+CLASS is a Symbol (object class name), and SLOTS (object properties) is a
+basic CBOR mapping, where keys are Symbol (property name) and they map to
+the present serialization value. Unbound slots may be left out from
+encoding, or they can be encoded and have the value UNDEFINED.
+
+A proper encoder must use Symbols to represent the class and slot names,
+even if the language does not differentiate between strings or symbols in
+this case. If it does not matter, they can be uninterned, or keyword
+symbols.
+
+
+
+
+[1] https://en.wikipedia.org/wiki/Symbol_(programming)
+[2] https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/for
+[3] https://docs.scheme.org/surveys/keyword-syntax/

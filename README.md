@@ -16,9 +16,52 @@ For now the only exported functions are `encode` and `decode`.
 
 Where `sequence-of-bytes` is of type `(simple-array (unsigned-byte 8) 1)`.
 
-You can throw pretty much any Lisp value at `encode` (except circular data) and
-it should do what you'd reasonably expect. Some dynamic variables control what
-happens in the usual CL ambiguities:
+## `*strict*` mode
+
+This was added in november 2024, and it's `T` by default. For compatibility, if
+you were using this library previously, you should bind it to `NIL`.
+
+In short, `*strict*` mode is suitable for serialization of your program state,
+if you'd like to load it later and get back the exact same structures. The
+following happen in strict mode:
+
+- symbols are encoded using custom tag 55, rather than strings.
+
+- lists are encoded using custom tag 56, and non-proper lists are supported.
+
+- characters are encoded using custom tag 57, rather than strings.
+
+- objects are encoded using custom tag 58, rather than maps, and will be
+  reinstantiated and get the same slot values on deserialization.
+
+- rationals are encoded using custom tag 30, rather than converted to float
+
+- `*strict*` mode affects the decoder too: maps will be decoded as hash tables
+  and their keys will not be converted to symbols, ignoring
+  `*string-to-symbol*`. The simple value 247 will be decoded as
+  `cbor::cbor-undefined` (it's intentionally not exported).
+
+## Circular data - `*use-sharedrefs*` (default: `T`)
+
+We support proper object references and circular data using the
+[value sharing tags](https://cbor.schmorp.de/value-sharing) (28 and 29). It's
+enabled by default, but you can disable it by setting `*use-sharedrefs*` to
+`NIL`. This ensures that if you serialize, say `[ foo, foo ]`, where `foo` is
+some object, on deserialization both array elements will still point to the same
+object, that is, you'll have `(eq (aref data 0) (aref data 1))`.
+
+This has some impact on encoder performance, as we need an extra-step to walk
+the data structure and build a hash table with shared values. If you are certain
+that you don't need this functionality, you can bind it to `NIL`.
+
+## Shared strings - `*use-stringrefs*` (default: `T`)
+
+We support [the stringref tags](http://cbor.schmorp.de/stringref), which enable
+compression of repeated strings. This significantly reduces the size of the
+generated binary, for a small performance cost in encoding. Bind
+`*use-stringrefs*` to `NIL` if you want to disable it.
+
+## Other dynamic variables (for non-strict mode)
 
 - `*jsown-semantics*` — bind this to `T` if you want the encoder/decoder to work
   similarly to JSOWN (which is the fastest JSON parser for CL that I

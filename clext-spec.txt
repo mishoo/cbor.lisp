@@ -15,10 +15,7 @@ typically used in Lisp, but also in many other languages, the goal being
 that on deserialization we get back an isomorphic data structure.
 
 In this specification, when we mention NULL, UNDEFINED, INTEGER, STRING,
-ARRAY or MAP we refer to the basic CBOR data types. In particular, the last
-three should be of definite length, that is, encoders should avoid producing
-the streaming variants, and decoders may signal an error when they encounter
-indefinite length structures.
+ARRAY or MAP we refer to the basic CBOR data types.
 
 
 

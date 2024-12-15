@@ -66,7 +66,7 @@
 (defun dig-references (data)
   "Builds a set (as a hash table) of objects that are seen more than
 once. Will return NIL if no duplicates are encountered."
-  ;; (declare #.*optimize*)
+  (declare #.*optimize*)
   (let ((seen (make-hash-table :test #'eq))
         (refd (make-hash-table :test #'eq)))
     (labels

@@ -231,7 +231,7 @@
            #.*optimize*)
   (with-tag (input (ms-read-byte input))
     (unless (= type 2)
-      (decode-error ("Expected binary sequence in bignum, found ~A" type) input))
+      (decode-error ("Expected binary sequence in read-bignum, found ~A" type) input))
     (let ((seq (read-binary input argument special?))
           (val 0))
       (declare (type raw-data seq)

@@ -285,29 +285,27 @@
       (decode-error ("Expected binary sequence in read-encoded-cbor") input))
     (cons 'cbor-encoded (read-binary input argument special?))))
 
+(defun %make-symbol (data)
+  (typecase data
+    (symbol data)
+    (string (intern data #.(find-package "KEYWORD")))
+    ((vector * 1)
+     (when (stringp (aref data 0))
+       (make-symbol (aref data 0))))
+    ((vector * 2)
+     (when (stringp (aref data 1))
+       (cond
+         ((not (aref data 0))           ; uninterned
+          (make-symbol (aref data 1)))
+         ((stringp (aref data 0))       ; package must be string
+          (intern (aref data 1) (find-package (aref data 0)))))))))
+
 (defun read-symbol (input)
   (declare (type memstream input)
            #.*optimize*)
-  ;; We expect a string, or an array of one or two elements, but
-  ;; shared refs makes it hard to validate data before reading it. So
-  ;; let's just decode the data item and validate after.
   (let ((data (%decode input)))
-    (typecase data
-      (string (intern data #.(find-package "KEYWORD")))
-      ((vector * 1)
-       (unless (stringp (aref data 0))
-         (decode-error ("Expected string in read-symbol") input))
-       (make-symbol (aref data 0)))
-      ((vector * 2)
-       (when (and (aref data 0) (not (stringp (aref data 0))))
-         (decode-error ("Expected string in read-symbol (package name)") input))
-       (unless (stringp (aref data 1))
-         (decode-error ("Expected string in read-symbol (symbol name)") input))
-       (if (aref data 0)
-           (intern (aref data 1) (find-package (aref data 0)))
-           (make-symbol (aref data 1))))
-      (t
-       (decode-error ("Invalid symbol encoding ~A" (type-of data)) input)))))
+    (or (%make-symbol data)
+        (decode-error ("Invalid symbol encoding ~A" data) input))))
 
 (defun read-list* (input)
   (declare (type memstream input)
@@ -341,7 +339,7 @@
   (with-tag (input (ms-read-byte input))
     (unless (and (= type 4) (= argument 2))
       (decode-error ("Expected array of two elements in read-object") input)))
-  (let* ((name (%decode input)))
+  (let* ((name (read-symbol input)))
     (unless (symbolp name)
       (decode-error ("Expected class name (symbol) in read-object") input))
     (with-tag (input (ms-read-byte input))
@@ -353,7 +351,7 @@
         (read-entries input
                       (unless special? argument)
                       (lambda ()
-                        (let ((slot (%decode input))
+                        (let ((slot (read-symbol input))
                               (value (%decode input)))
                           (unless (eq value 'cbor-undefined)
                             (setf (slot-value object slot) value)))))

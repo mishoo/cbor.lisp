@@ -1,6 +1,19 @@
 CBOR extensions for Lisp and other dynamic languages
 ====================================================
 
+Authors:
+- Mihai Bazon <mihai.bazon@gmail.com>
+- Eugene Zaikonnikov <eugene@funcall.org>
+
+Reviewers:
+- Carsten Bormann <cabo@tzi.org>
+- Christian Amsüss <christian@amsuess.com>
+
+Status: draft (discussion in progress; suggested tag values may change)
+
+
+
+
 SUMMARY
 
 | Tag | Description | Data item        |
@@ -106,9 +119,9 @@ Examples:
 
 
 
-3. TAG 57: Character
+3. TAG 57: Character (Unicode scalar value)
 
-A single Unicode character
+A single character.
 
 3.1. Data item: UNSIGNED INTEGER
 
@@ -117,22 +130,25 @@ The Unicode code point.
 
 
 
-4. TAG 58: Object
+4. TAG 58: Object Snapshot
 
-A fully constructed object.
+Unlike tags 26 [4] and 27 [5], which specify how to construct an object, the
+Object Snapshot tag records the internal state of an object at the time of
+serialization. It encodes the object class name and properties/values map.
 
-4.1. Data item: ARRAY (2) [ SYMBOL, MAP   ]
-                            CLASS   SLOTS
+4.1. Data item: ARRAY (2) [ CLASS, SLOTS ]
 
 CLASS is a Symbol (object class name), and SLOTS (object properties) is a
 basic CBOR mapping, where keys are Symbol (property name) and they map to
 the present serialization value. Unbound slots may be left out from
 encoding, or they can be encoded and have the value UNDEFINED.
 
-A proper encoder must use Symbols to represent the class and slot names,
-even if the language does not differentiate between strings or symbols in
-this case. If it does not matter, they can be uninterned, or keyword
-symbols.
+To save space, the class and slot names may be unwrapped symbols (the symbol
+tag may be missing), thus they can be directly encoded as a STRING (for
+keyword symbols) or an ARRAY for package-qualified symbols (refer to the
+Symbol encoding above). This simplification may also be suitable for
+languages where the class name and object properties are commonly plain
+strings (e.g. Java or JavaScript).
 
 
 
@@ -140,3 +156,5 @@ symbols.
 [1] https://en.wikipedia.org/wiki/Symbol_(programming)
 [2] https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/for
 [3] https://docs.scheme.org/surveys/keyword-syntax/
+[4] http://cbor.schmorp.de/perl-object
+[5] http://cbor.schmorp.de/generic-object

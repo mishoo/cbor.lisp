@@ -145,13 +145,16 @@
        (write-tag 3 len output)
        (ms-write-sequence (trivial-utf-8:string-to-utf-8-bytes str) output)))))
 
-(defun encode-symbol (symbol output)
+(defun encode-symbol (symbol output &optional omit-header)
   (declare (type symbol symbol)
            (type memstream output)
            #.*optimize*)
   (cond
+    ((eq symbol 'cbor-undefined)
+     (encode-undefined output))
     (*strict*
-     (write-tag 6 +tag-symbol+ output)
+     (unless omit-header
+       (write-tag 6 +tag-symbol+ output))
      (let ((pak (symbol-package symbol)))
        (unless (eq pak #.(find-package "KEYWORD"))
          (write-tag 4 (if pak 2 1) output) ;; array
@@ -249,7 +252,10 @@
      (loop for val in value do (%encode val output)))))
 
 (labels
-    ((write-slots-map (object output)
+    ((unwrapped-symbol (symbol output)
+       (encode-maybe-shared (symbol output)
+         (encode-symbol symbol output t)))
+     (write-slots-map (object output)
        (let* ((class (class-of object))
               (slots (remove-if-not
                       (lambda (key) (slot-boundp object key))
@@ -259,7 +265,7 @@
          (with-dictionary (output (length slots))
            (loop for key in slots
                  for val = (slot-value object key)
-                 do (%encode key output)
+                 do (unwrapped-symbol key output)
                     (%encode val output)))))
      (write-object (object output)
        (cond
@@ -268,10 +274,10 @@
           ;; an object is an array of two elements: class name and
           ;; slot->value mapping.
           (write-tag 4 2 output)
-          (%encode (class-name (class-of object)) output)
+          (unwrapped-symbol (class-name (class-of object)) output)
           (write-slots-map object output))
          (t (write-slots-map object output)))))
-  (declare (inline write-slots-map))
+  (declare (inline write-slots-map write-object unwrapped-symbol))
   (defgeneric encode-object (object output)
     (:method ((object standard-object) (output memstream))
       (write-object object output))
@@ -353,11 +359,8 @@
            (encode-maybe-shared (value output)
              (encode-string value output)))
           (symbol
-           (cond
-             ((eq value 'cbor-undefined)
-              (encode-undefined output))
-             (t (encode-maybe-shared (value output)
-                  (encode-symbol value output)))))
+           (encode-maybe-shared (value output)
+             (encode-symbol value output)))
           (hash-table
            (encode-maybe-shared (value output)
              (encode-hash value output)))

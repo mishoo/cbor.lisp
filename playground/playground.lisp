@@ -2,7 +2,7 @@
 
 #-sbcl (error "This file requires SBCL")
 
-(ql:quickload '("flexi-streams" "yason" "jsown" "cl-base64"))
+(ql:quickload '("flexi-streams" "yason" "jsown" "cl-base64" "cl-store"))
 
 (defun test-encode (value &rest args)
   (let ((data (coerce (apply #'encode value args) 'raw-data)))
@@ -51,6 +51,14 @@
                                 :if-does-not-exist :create)
          ,@body))))
 
+(defmacro with-binary-input ((input filename) &body body)
+  (let ((vfilename (gensym)))
+    `(let ((,vfilename ,filename))
+       (with-open-file (,input ,vfilename
+                               :element-type '(unsigned-byte 8)
+                               :direction :input)
+         ,@body))))
+
 (defmacro %test-json (filename title decode-json encode-json)
   (let ((vfilename (gensym)))
     `(let ((,vfilename ,filename)
@@ -66,6 +74,12 @@
        (let ((seq (mytime "CBOR-ENCODE" "" (encode data1))))
          (with-binary-output (output (format nil "~A-~A.bin.cbor" filename ,title))
            (write-sequence seq output))
+         ;; (let ((cl-store:*check-for-circs* t)
+         ;;       (filename (format nil "~A-~A.bin.cl-store" filename ,title)))
+         ;;   (with-binary-output (output filename)
+         ;;     (mytime "CL-STORE-ENCODE" "" (cl-store:store data1 output)))
+         ;;   (with-binary-input (input filename)
+         ;;     (mytime "CL-STORE-DECODE" "" (cl-store:restore input))))
          (setf seq (coerce seq 'raw-data))
          (let* ((data (mytime "CBOR-DECODE"
                           (format nil "(~:D bytes BINARY)" (length seq))

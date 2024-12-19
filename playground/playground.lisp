@@ -17,7 +17,7 @@
     v2))
 
 (defun dumphash (hash)
-  (loop for key being the hash-key using (hash-value val) of hash
+  (loop for key being the hash-key of hash using (hash-value val)
         do (format t "~S : ~S~%" key val)))
 
 (defparameter *timing-name* nil)

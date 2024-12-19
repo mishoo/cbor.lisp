@@ -183,7 +183,7 @@
            (type memstream output)
            #.*optimize*)
   (with-dictionary (output (hash-table-count value))
-    (loop for key being the hash-key using (hash-value val) of value
+    (loop for key being the hash-key of value using (hash-value val)
           do (%encode key output)
              (%encode val output))))
 

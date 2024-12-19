@@ -96,8 +96,8 @@ once. Will return NIL if no duplicates are encountered."
               (mark data))
              (hash-table
               (when (mark data)
-                (loop for key being the hash-key
-                        using (hash-value val) of data
+                (loop for key being the hash-key of data
+                        using (hash-value val)
                       do (dig key)
                          (dig val))))
              (cons

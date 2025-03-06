@@ -18,10 +18,10 @@ SUMMARY
 
 | Tag | Description | Data item        |
 |-----+-------------+------------------|
-|  55 | Symbol      | STRING or ARRAY  |
-|  56 | Linked list | ARRAY            |
-|  57 | Character   | UNSIGNED INTEGER |
-|  58 | Object      | ARRAY            |
+| 280 | Symbol      | STRING or ARRAY  |
+| 281 | Linked list | ARRAY            |
+| 282 | Character   | UNSIGNED INTEGER |
+| 283 | Object      | ARRAY            |
 
 These tags help for more precise serialization of several data structures
 typically used in Lisp, but also in many other languages, the goal being
@@ -33,7 +33,7 @@ ARRAY or MAP we refer to the basic CBOR data types.
 
 
 
-1. TAG 55: SYMBOL
+1. TAG 280: SYMBOL
 
 A Lisp symbol. Note that many other languages have a Symbol type [1].
 
@@ -68,7 +68,7 @@ produce what is most sensible for the target language.
 
 
 
-2. TAG 56: LIST
+2. TAG 281: LIST
 
 A tag for pairs / linked lists. This data type can be used to represent a
 wide range of structures, from simple lists to trees, graphs, sparse
@@ -119,7 +119,7 @@ Examples:
 
 
 
-3. TAG 57: Character (Unicode scalar value)
+3. TAG 282: Character (Unicode scalar value)
 
 A single character.
 
@@ -130,7 +130,7 @@ The Unicode code point.
 
 
 
-4. TAG 58: Object Snapshot
+4. TAG 283: Object Snapshot
 
 Unlike tags 26 [4] and 27 [5], which specify how to construct an object, the
 Object Snapshot tag records the internal state of an object at the time of

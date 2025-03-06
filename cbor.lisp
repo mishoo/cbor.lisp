@@ -28,10 +28,10 @@
 (defconstant +tag-cbor+ 55799)
 
 ;; our tags
-(defconstant +tag-symbol+ 55)
-(defconstant +tag-list+ 56)
-(defconstant +tag-character+ 57)
-(defconstant +tag-object+ 58)
+(defconstant +tag-symbol+ 280)
+(defconstant +tag-list+ 281)
+(defconstant +tag-character+ 282)
+(defconstant +tag-object+ 283)
 
 (defparameter *strict* t
   "Strict mode: use the custom tags above for precise serialization of
